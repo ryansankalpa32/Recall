@@ -120,10 +120,3 @@ engine     engine
 - Continuous location tracking drains battery — use significant-location-change patterns, not polling
 - Low-confidence AI parses need a clarification path rather than a silent (possibly wrong) reminder
 
-## Related docs
-
-See `smart-notes-app-guide.md` for the full technical deep-dive — AI prompt design, the location/time engine implementation details, and the build roadmap.
-
-## License
-
-_Not yet chosen — add one (e.g. MIT, Apache-2.0) before open-sourcing or publishing._
