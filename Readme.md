@@ -1,4 +1,4 @@
-# Threadline
+# Recall 
 
 Notes that know where and when to remind you. Instead of manually setting a time or pinning a location for every reminder, you write a note in plain language — "I need to get shoes," "homework in maths," "work to do at 4pm" — and the app figures out the trigger itself.
 
