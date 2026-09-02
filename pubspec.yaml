@@ -1,0 +1,43 @@
+name: recall
+description: "Notes that know where and when to remind you."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.1
+
+dependencies:
+  drift: ^2.34.3
+  drift_flutter: ^0.3.1
+  flutter:
+    sdk: flutter
+  flutter_local_notifications: ^22.3.0
+  flutter_riverpod: ^3.4.2
+  flutter_timezone: ^5.1.0
+  google_maps_flutter: ^2.18.0
+  intl: ^0.20.3
+  permission_handler: ^13.0.1
+  riverpod_annotation: ^4.0.6
+  timezone: ^0.11.1
+  workmanager: ^0.10.9
+
+# Keep path_provider_android on the 2.2.x line. From 2.3.0 it pulls in `jni`,
+# whose android/build.gradle declares an `externalNativeBuild { cmake }` and so
+# forces the whole app to require an Android NDK — nothing else here needs one.
+# Without a local NDK, AGP fails configuration ("NDK not configured") and then
+# tries to auto-download it from dl.google.com. path_provider itself only asks
+# for ^2.2.5, so this stays inside its supported range.
+dependency_overrides:
+  path_provider_android: '>=2.2.5 <2.3.0'
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  riverpod_generator: ^4.0.8
+  drift_dev: ^2.34.5
+  build_runner: ^2.16.0
+  mocktail: ^1.0.5
+
+flutter:
+  uses-material-design: true
