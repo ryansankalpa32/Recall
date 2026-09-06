@@ -56,6 +56,27 @@ The model is never asked for `locationKind`, `locationValue`, or `recurrenceRule
 — they are absent from its schema entirely, so it *cannot* emit a Phase 3+
 trigger. The callable fills them in as null. See the comment in `schema.ts`.
 
+## SDK version is load-bearing
+
+`@google/genai` must be **>= 2.0.0**. The v1 SDK sends what the server now calls
+the "legacy Interactions API schema" and every request fails with a 400,
+regardless of model or payload. v1 split structured output across
+`response_format` + `response_mime_type`; v2 unifies it:
+
+```ts
+response_format: { type: "text", mime_type: "application/json", schema: {...} }
+```
+
+and the response is read from `interaction.output_text` rather than walking
+`interaction.outputs`. Do not "simplify" this back — it compiles either way on
+v1, and only fails at runtime.
+
+## Rate limits
+
+The Gemini free tier allows ~5 requests/minute for `gemini-3.8-flash`. That is
+fine for one person tapping Save, but any batch verification of the prompt needs
+pacing or it will 429 halfway through.
+
 ## Setup
 
 ```bash

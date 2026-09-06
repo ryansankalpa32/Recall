@@ -64,18 +64,20 @@ export const parseNote = onCall(
         system_instruction: SYSTEM_INSTRUCTION,
         input: `Current local time: ${now}\nTimezone: ${timeZone}\nNote: ${rawText}`,
         generation_config: { thinking_level: "low", max_output_tokens: 512 },
-        // These are two separate top-level fields on the Interactions API —
-        // `response_mime_type` is required whenever `response_format` is set.
-        response_format: PARSE_RESULT_JSON_SCHEMA,
-        response_mime_type: "application/json",
+        // Unified `response_format` — @google/genai v2 replaced the old split
+        // `response_format` + `response_mime_type` pair, and the server now
+        // rejects the v1 shape outright ("legacy Interactions API schema").
+        response_format: {
+          type: "text",
+          mime_type: "application/json",
+          schema: PARSE_RESULT_JSON_SCHEMA,
+        },
       });
 
       if (interaction.status !== "completed") {
         logger.warn("Interaction did not complete", { status: interaction.status });
       }
-      for (const block of interaction.outputs ?? []) {
-        if (block.type === "text") outputText += block.text;
-      }
+      outputText = interaction.output_text ?? "";
     } catch (error) {
       logger.error("Gemini call failed", { error });
       throw new HttpsError("unavailable", "Could not reach the parsing service.");
