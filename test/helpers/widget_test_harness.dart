@@ -1,12 +1,16 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recall/core/providers/core_providers.dart';
 import 'package:recall/data/local/database/app_database.dart';
 
 /// Pumps [child] inside a [ProviderScope] backed by a fresh in-memory
 /// database, runs [body], then tears the tree down.
+///
+/// [overrides] are appended after the database override, so a test can swap
+/// in a mock parser or scheduler without needing Firebase initialized.
 ///
 /// The explicit unmount at the end matters and is why this helper exists:
 /// drift schedules a zero-duration `Timer` when the last query-stream
@@ -19,13 +23,14 @@ import 'package:recall/data/local/database/app_database.dart';
 Future<void> runWithDatabase(
   WidgetTester tester,
   Widget child,
-  Future<void> Function(AppDatabase db) body,
-) async {
+  Future<void> Function(AppDatabase db) body, {
+  List<Override> overrides = const [],
+}) async {
   final db = AppDatabase.forTesting(NativeDatabase.memory());
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [appDatabaseProvider.overrideWithValue(db), ...overrides],
       child: child,
     ),
   );

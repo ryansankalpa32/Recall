@@ -7,8 +7,11 @@ environment:
   sdk: ^3.13.1
 
 dependencies:
+  cloud_functions: ^6.4.0
   drift: ^2.34.3
   drift_flutter: ^0.3.1
+  firebase_app_check: ^0.4.7
+  firebase_core: ^4.14.0
   flutter:
     sdk: flutter
   flutter_local_notifications: ^22.3.0

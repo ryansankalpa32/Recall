@@ -8,6 +8,10 @@ import '../../features/scheduling/notification_service.dart';
 import '../../features/scheduling/permission_service.dart';
 import '../../features/scheduling/scheduling_service.dart';
 import '../../features/scheduling/workmanager_service.dart';
+import '../../services/ai/backend_note_parser.dart';
+import '../../services/ai/note_parser.dart';
+import '../../services/backend/firebase_recall_api_client.dart';
+import '../../services/backend/recall_api_client.dart';
 
 /// The app's single [AppDatabase] instance — kept alive for the app's
 /// lifetime (opened once in `bootstrap.dart` and overridden into this
@@ -42,4 +46,19 @@ final schedulingServiceProvider = Provider<SchedulingService>((ref) {
     workManagerService: ref.watch(workManagerServiceProvider),
     permissionService: ref.watch(permissionServiceProvider),
   );
+});
+
+/// The backend proxy client. Holds no secrets — the Gemini key lives in Cloud
+/// Secret Manager, injected into the `parseNote` callable (see `functions/`).
+final recallApiClientProvider = Provider<RecallApiClient>((ref) {
+  return FirebaseRecallApiClient();
+});
+
+/// Free-text note parsing (Phase 2, time intelligence).
+///
+/// Lazy, like every provider here: nothing touches Firebase until a note is
+/// actually parsed, so tests that override this — or that never parse at all —
+/// never need Firebase initialized.
+final noteParserProvider = Provider<NoteParser>((ref) {
+  return BackendNoteParser(ref.watch(recallApiClientProvider));
 });

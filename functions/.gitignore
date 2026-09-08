@@ -1,0 +1,11 @@
+node_modules/
+lib/
+*.log
+
+# Secrets — never commit. Real values live in Cloud Secret Manager
+# (firebase functions:secrets:set GEMINI_API_KEY); .secret.local is only for
+# the local emulator.
+.env
+.env.*
+.secret.local
+*.local

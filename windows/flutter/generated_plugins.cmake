@@ -3,6 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  firebase_app_check
+  firebase_core
   flutter_timezone
   permission_handler_windows
 )

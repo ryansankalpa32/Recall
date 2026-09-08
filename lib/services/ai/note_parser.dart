@@ -35,9 +35,27 @@ class ParsedNote {
   final double confidence;
 }
 
+/// Thrown when a note could not be parsed: no network, App Check rejected the
+/// call, the backend was unreachable, or the model's output failed validation.
+///
+/// Deliberately carries no Firebase (or any other backend) types. The capture
+/// sheet catches this and falls back to the manual date/time picker, and must
+/// not have to know what is behind [NoteParser] to do so.
+class NoteParseException implements Exception {
+  const NoteParseException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'NoteParseException: $message';
+}
+
 /// Backend-proxied note parser. Implemented in Phase 2 against the backend's
-/// `/parse-note` endpoint (see `services/backend/recall_api_client.dart`) —
-/// never called from Phase 1 UI.
+/// `parseNote` endpoint (see `services/backend/recall_api_client.dart`).
+///
+/// Throws [NoteParseException] on any failure — implementations must not
+/// return a partial or guessed [ParsedNote], because the confirmation card
+/// would then present a guess as an interpretation.
 abstract class NoteParser {
   Future<ParsedNote> parse(String rawText);
 }
