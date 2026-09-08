@@ -63,7 +63,12 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     scheduling = MockSchedulingService();
     parser = MockNoteParser();
-    when(() => scheduling.scheduleReminder(any())).thenAnswer((_) async => true);
+    when(() => scheduling.scheduleReminder(any())).thenAnswer(
+      (_) async => const ReminderOutcome(
+        notificationsAllowed: true,
+        delivery: ReminderDelivery.exactAlarm,
+      ),
+    );
 
     container = ProviderContainer(
       overrides: [

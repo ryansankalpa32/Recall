@@ -1,6 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:intl/intl.dart';
 
 import '../ai/note_parser.dart';
 import 'recall_api_client.dart';
@@ -13,7 +12,20 @@ import 'recall_api_client.dart';
 /// `SchedulingService` hands that straight to `tz.TZDateTime.from(..., tz.local)`.
 /// A `Z` slipping in here would shift every reminder by the device's UTC
 /// offset. The backend rejects the same shapes for the same reason.
-final _localIso = DateFormat("yyyy-MM-dd'T'HH:mm:ss");
+///
+/// Built by hand rather than with `DateFormat`, and that is load-bearing.
+/// `intl` renders digits in the *ambient locale's* numbering system, so under
+/// `ar_EG`, `fa`, `my`, `ne` or `bn` a formatted timestamp comes out as
+/// ٢٠٢٦-٠٩-٠٧T... — which fails the backend's
+/// `LOCAL_DATETIME_RE` and makes every parse return `invalid-argument`. The app
+/// sets no locale today, so this is currently latent; adding
+/// `flutter_localizations` would make it live. `int.toString()` is always ASCII.
+String _localIso(DateTime d) {
+  String p(int value, [int width = 2]) =>
+      value.toString().padLeft(width, '0');
+  return '${p(d.year, 4)}-${p(d.month)}-${p(d.day)}'
+      'T${p(d.hour)}:${p(d.minute)}:${p(d.second)}';
+}
 
 /// Talks to the Firebase Cloud Functions proxy that holds the Gemini key.
 ///
@@ -41,7 +53,7 @@ class FirebaseRecallApiClient implements RecallApiClient {
     try {
       final result = await _functions.httpsCallable('parseNote').call<Object?>({
         'rawText': rawText,
-        'now': _localIso.format(DateTime.now()),
+        'now': _localIso(DateTime.now()),
         'timeZone': timeZone,
       });
       data = result.data;

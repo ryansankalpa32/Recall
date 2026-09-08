@@ -17,6 +17,7 @@ class ParsedNoteConfirmation extends StatelessWidget {
     required this.parsed,
     required this.overrideDateTime,
     required this.isSaving,
+    this.notice,
     required this.onConfirm,
     required this.onEditTime,
     required this.onBack,
@@ -29,6 +30,12 @@ class ParsedNoteConfirmation extends StatelessWidget {
   final DateTime? overrideDateTime;
 
   final bool isSaving;
+
+  /// A message that must be resolved before this card can commit — currently
+  /// only "the parsed time has just passed", which `confirm()` raises when the
+  /// card has been sitting open long enough for its own answer to expire.
+  final String? notice;
+
   final VoidCallback onConfirm;
   final VoidCallback onEditTime;
   final VoidCallback onBack;
@@ -90,6 +97,14 @@ class ParsedNoteConfirmation extends StatelessWidget {
             ),
           ),
         ),
+        if (notice != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            notice!,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: theme.colorScheme.error),
+          ),
+        ],
         const SizedBox(height: 16),
         FilledButton(
           onPressed: isSaving ? null : onConfirm,

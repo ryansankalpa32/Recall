@@ -22,6 +22,7 @@ class NoteFormState {
     this.parsed,
     this.parseFailed = false,
     this.error,
+    this.notice,
   });
 
   final String rawText;
@@ -44,6 +45,11 @@ class NoteFormState {
 
   final Object? error;
 
+  /// A plain user-facing message — a rejected time, or a caveat about how a
+  /// saved reminder will actually be delivered. Distinct from [error], which
+  /// holds an exception and reads as a failure; a notice is not a failure.
+  final String? notice;
+
   bool get isBusy =>
       stage == CaptureStage.parsing || stage == CaptureStage.saving;
 
@@ -59,6 +65,8 @@ class NoteFormState {
     bool? parseFailed,
     Object? error,
     bool clearError = false,
+    String? notice,
+    bool clearNotice = false,
   }) {
     return NoteFormState(
       rawText: rawText ?? this.rawText,
@@ -68,6 +76,7 @@ class NoteFormState {
       parsed: clearParsed ? null : (parsed ?? this.parsed),
       parseFailed: parseFailed ?? this.parseFailed,
       error: clearError ? null : (error ?? this.error),
+      notice: clearNotice ? null : (notice ?? this.notice),
     );
   }
 }
@@ -76,20 +85,61 @@ class NoteFormController extends Notifier<NoteFormState> {
   @override
   NoteFormState build() => const NoteFormState();
 
+  /// Clears the form back to empty.
+  ///
+  /// The capture sheet calls this as it opens. Without it the controller keeps
+  /// its state for the life of the app (the provider is not auto-disposed), so
+  /// a sheet dismissed mid-flow would leak two things into the next note: the
+  /// previous [NoteFormState.rawText] — invisible, because the `TextField` is
+  /// uncontrolled and renders empty — and a sticky [NoteFormState.parseFailed],
+  /// which silently routes every later note past the parser.
+  void reset() => state = const NoteFormState();
+
   void setRawText(String text) {
     // Any existing interpretation is now stale.
+    //
+    // A genuine edit also retires a previous parse failure: the text the
+    // parser choked on is not the text we now have, so it has earned another
+    // attempt. Re-submitting *unchanged* text after a failure still saves
+    // directly, which is what keeps a note writable with no backend reachable.
+    final textChanged = text != state.rawText;
     state = state.copyWith(
       rawText: text,
       clearParsed: true,
       clearError: true,
+      clearNotice: true,
+      parseFailed: textChanged ? false : null,
       stage: CaptureStage.editing,
     );
   }
 
   void setPickedDateTime(DateTime? dateTime) {
-    state = dateTime == null
-        ? state.copyWith(clearPickedDateTime: true, clearError: true)
-        : state.copyWith(pickedDateTime: dateTime, clearError: true);
+    if (dateTime == null) {
+      state = state.copyWith(
+        clearPickedDateTime: true,
+        clearError: true,
+        clearNotice: true,
+      );
+      return;
+    }
+
+    // The backend refuses a parsed time in the past; the manual path had no
+    // equivalent guard, so a picked date of yesterday (or today at an hour
+    // already gone) saved happily and scheduled an alarm that can only fire
+    // immediately or never.
+    if (!dateTime.isAfter(DateTime.now())) {
+      state = state.copyWith(
+        clearError: true,
+        notice: 'That time has already passed — pick a later one.',
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      pickedDateTime: dateTime,
+      clearError: true,
+      clearNotice: true,
+    );
   }
 
   /// Returns to the text field from the confirmation card, keeping what was
@@ -99,6 +149,7 @@ class NoteFormController extends Notifier<NoteFormState> {
       stage: CaptureStage.editing,
       clearParsed: true,
       clearError: true,
+      clearNotice: true,
     );
   }
 
@@ -135,9 +186,21 @@ class NoteFormController extends Notifier<NoteFormState> {
     // the note manual again — hence a null confidence, matching Note's contract
     // that confidence is only ever set by a parse.
     final override = state.pickedDateTime;
+    final effective = override ?? parsed.resolvedDatetime;
+
+    // The parse resolved against the clock at *parse* time, and this card can
+    // sit on screen indefinitely. "take the pasta out in 2 minutes" plus a
+    // three-minute pause would otherwise commit a time already gone.
+    if (effective != null && !effective.isAfter(DateTime.now())) {
+      state = state.copyWith(
+        notice: 'That time has just passed — set a new one before saving.',
+      );
+      return false;
+    }
+
     return _persist(
       taskDescription: parsed.taskDescription,
-      resolvedDatetime: override ?? parsed.resolvedDatetime,
+      resolvedDatetime: effective,
       confidence: override != null ? null : parsed.confidence,
     );
   }
@@ -199,14 +262,32 @@ class NoteFormController extends Notifier<NoteFormState> {
       );
 
       final id = await ref.read(noteRepositoryProvider).insertNote(note);
+      final saved = note.copyWith(id: id);
 
+      // Scheduling is deliberately outside the insert's failure path. Sharing
+      // one try meant a scheduler throw left the row already written while
+      // reporting failure — so tapping Save again inserted a duplicate.
+      // The note is committed at this point; the only open question is whether
+      // its reminder is live, and that is answered without losing the note.
+      String? caveat;
       if (hasTime) {
-        await ref
-            .read(schedulingServiceProvider)
-            .scheduleReminder(note.copyWith(id: id));
+        try {
+          final outcome = await ref
+              .read(schedulingServiceProvider)
+              .scheduleReminder(saved);
+          caveat = outcome.caveat;
+        } catch (error) {
+          // Downgrade the status so the list does not claim a reminder that
+          // was never registered.
+          await ref
+              .read(noteRepositoryProvider)
+              .updateNote(saved.copyWith(status: NoteStatus.pending));
+          caveat = 'Saved, but the reminder could not be scheduled. '
+              'Open the note to set a time again.';
+        }
       }
 
-      state = const NoteFormState();
+      state = NoteFormState(notice: caveat);
       return true;
     } catch (error) {
       state = state.copyWith(stage: CaptureStage.editing, error: error);

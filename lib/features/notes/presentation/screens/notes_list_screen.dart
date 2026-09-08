@@ -55,7 +55,7 @@ class NotesListScreen extends ConsumerWidget {
         error: (error, stack) => Center(child: Text('Could not load notes: $error')),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => NoteCaptureSheet.show(context),
+        onPressed: () => NoteCaptureSheet.show(context, ref),
         child: const Icon(Icons.add),
       ),
     );

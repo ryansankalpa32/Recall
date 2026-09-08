@@ -69,9 +69,11 @@ void main() {
   test('near-term reminders use exact NotificationService scheduling', () async {
     final note = buildNote(DateTime.now().add(const Duration(minutes: 5)));
 
-    final usedExact = await scheduling.scheduleReminder(note);
+    final outcome = await scheduling.scheduleReminder(note);
 
-    expect(usedExact, isTrue);
+    expect(outcome.usedExactAlarm, isTrue);
+    expect(outcome.notificationsAllowed, isTrue);
+    expect(outcome.caveat, isNull);
     verify(() => notificationService.scheduleNoteReminder(
           noteId: 1,
           title: any(named: 'title'),
@@ -88,9 +90,13 @@ void main() {
   test('far-out reminders defer to WorkManagerService', () async {
     final note = buildNote(DateTime.now().add(const Duration(days: 3)));
 
-    final usedExact = await scheduling.scheduleReminder(note);
+    final outcome = await scheduling.scheduleReminder(note);
 
-    expect(usedExact, isFalse);
+    expect(outcome.usedExactAlarm, isFalse);
+    expect(outcome.delivery, ReminderDelivery.deferredWork);
+    expect(outcome.caveat, isNull,
+        reason: 'a far-out reminder going through WorkManager is expected, '
+            'not something to warn about');
     verify(() => workManagerService.scheduleNoteReminder(
           noteId: 1,
           scheduledDate: any(named: 'scheduledDate'),

@@ -16,7 +16,13 @@ import 'parsed_note_confirmation.dart';
 class NoteCaptureSheet extends ConsumerWidget {
   const NoteCaptureSheet({super.key});
 
-  static Future<void> show(BuildContext context) {
+  /// Opens the sheet on a clean form.
+  ///
+  /// The reset is why this takes a [WidgetRef]: the controller is not
+  /// auto-disposed, so without it a sheet dismissed mid-flow leaks its text and
+  /// its `parseFailed` flag into the next note.
+  static Future<void> show(BuildContext context, WidgetRef ref) {
+    ref.read(noteFormControllerProvider.notifier).reset();
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -29,7 +35,9 @@ class NoteCaptureSheet extends ConsumerWidget {
     final date = await showDatePicker(
       context: context,
       initialDate: now,
-      firstDate: now.subtract(const Duration(days: 1)),
+      // Today, not yesterday: a reminder can only be set for the future, and
+      // the controller rejects a past time anyway.
+      firstDate: DateTime(now.year, now.month, now.day),
       lastDate: now.add(const Duration(days: 365 * 2)),
     );
     if (date == null || !context.mounted) return;
@@ -51,7 +59,16 @@ class NoteCaptureSheet extends ConsumerWidget {
     final controller = ref.read(noteFormControllerProvider.notifier);
 
     Future<void> close(Future<bool> saved) async {
-      if (await saved && context.mounted) Navigator.of(context).pop();
+      if (!await saved || !context.mounted) return;
+      // Read before popping: the notice lives in the controller's post-save
+      // state, and it is the only place the user is told that a reminder will
+      // not fire the way they asked.
+      final notice = ref.read(noteFormControllerProvider).notice;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      Navigator.of(context).pop();
+      if (notice != null) {
+        messenger?.showSnackBar(SnackBar(content: Text(notice)));
+      }
     }
 
     return Padding(
@@ -68,6 +85,7 @@ class NoteCaptureSheet extends ConsumerWidget {
             parsed: formState.parsed!,
             overrideDateTime: formState.pickedDateTime,
             isSaving: formState.stage == CaptureStage.saving,
+            notice: formState.notice,
             onConfirm: () => close(controller.confirm()),
             onEditTime: () => _pickDateTime(context, ref),
             onBack: controller.backToEditing,
@@ -143,7 +161,13 @@ class _CaptureForm extends StatelessWidget {
               ),
           ],
         ),
-        if (formState.error != null) ...[
+        if (formState.notice != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            formState.notice!,
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ] else if (formState.error != null) ...[
           const SizedBox(height: 8),
           Text(
             formState.parseFailed

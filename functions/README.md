@@ -98,13 +98,25 @@ npm run serve          # build + functions emulator on :5001
 npm run deploy         # firebase deploy --only functions
 ```
 
-To point the app at the emulator, add this to `FirebaseRecallApiClient`'s
-constructor while developing:
+To point the app at the emulator, run with the dart-define that
+`lib/bootstrap.dart` reads — no source edit needed:
 
-```dart
-FirebaseFunctions.instanceFor(region: 'us-central1')
-    .useFunctionsEmulator('localhost', 5001);
+```bash
+flutter run --dart-define=USE_FIREBASE_EMULATOR=true
 ```
+
+**The host is not `localhost` everywhere.** On an Android emulator `localhost`
+is the emulated device itself; `10.0.2.2` is the alias for the host machine.
+An iOS simulator shares the host's network stack, so `localhost` is correct
+there. `bootstrap.dart` picks between the two on `defaultTargetPlatform`. A
+physical device can reach neither and needs the machine's LAN IP:
+
+```bash
+flutter run --dart-define=USE_FIREBASE_EMULATOR=true             --dart-define=FIREBASE_EMULATOR_HOST=192.168.1.5
+```
+
+The emulator does not read Secret Manager, so put the key in
+`functions/.env.local` (gitignored) for local runs.
 
 ## App Check
 
@@ -112,10 +124,23 @@ FirebaseFunctions.instanceFor(region: 'us-central1')
 open, paid Gemini relay for anyone who finds the URL — **do not ship with it
 off.**
 
-The consequence is that emulator and CI runs need debug providers. In
-`lib/bootstrap.dart` swap the production providers for
-`AndroidDebugProvider()` / `AppleDebugProvider()` during local development, and
-register the printed debug token in the Firebase console.
+The consequence is that Play Integrity and DeviceCheck reject every debug
+build — which looks exactly like "the parser is broken". `lib/bootstrap.dart`
+handles this automatically: it branches on `kDebugMode` and uses
+`AndroidDebugProvider` / `AppleDebugProvider` in debug builds, the production
+providers in release. No source edit needed.
+
+What you *do* have to do once: the debug provider prints a token on first
+launch. Register it under **App Check → Apps → Manage debug tokens** in the
+console, or every call comes back `unauthenticated`. To avoid re-registering
+after a clean install, pin a token you already registered:
+
+```bash
+flutter run --dart-define=APP_CHECK_DEBUG_TOKEN=<the-registered-token>
+```
+
+The Functions emulator does not enforce App Check — it logs a warning and lets
+the call through — so this only matters against the deployed callable.
 
 ## Cost
 
