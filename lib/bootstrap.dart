@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -9,8 +11,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/providers/core_providers.dart';
 import 'data/local/database/app_database.dart';
+import 'data/repositories/note_repository.dart';
 import 'features/scheduling/notification_service.dart';
+import 'features/scheduling/permission_service.dart';
+import 'features/scheduling/scheduling_service.dart';
 import 'features/scheduling/workmanager_service.dart';
+import 'features/sync/firestore_sync_service.dart';
 import 'firebase_options.dart';
 
 /// Region the `parseNote` callable is deployed to. Must match the `region` in
@@ -79,12 +85,18 @@ Future<void> bootstrap() async {
     notificationService.init,
   );
 
-  // Firebase backs the note parser only (the `parseNote` callable proxies
-  // Gemini — see `functions/`). Without it the app still runs: the capture
-  // sheet falls back to the manual date/time picker, which is exactly the
-  // Phase 1 behaviour. So this is another degrade-don't-crash init, and it is
-  // also why a dev without a configured Firebase project can still work on
-  // everything else.
+  // Set inside the Firebase init block below, only on success — read after
+  // it, to decide whether firestoreSyncServiceProvider gets a live override
+  // or keeps its no-op default.
+  FirestoreSyncService? syncService;
+
+  // Firebase backs the note parser (the `parseNote` callable proxies Gemini
+  // — see `functions/`) and the Firestore sync layer. Without it the app
+  // still runs: the capture sheet falls back to saving a plain, timeless
+  // note (no AI parser reachable), and notes simply stay local-only (no
+  // sync). So this is another degrade-don't-crash init, and it is also why a
+  // dev without a configured Firebase project can still work on everything
+  // else.
   await _initQuietly('Firebase', 'free-text note parsing is unavailable',
       () async {
     await Firebase.initializeApp(
@@ -118,11 +130,39 @@ Future<void> bootstrap() async {
     if (_useFirebaseEmulator) {
       FirebaseFunctions.instanceFor(region: _functionsRegion)
           .useFunctionsEmulator(_emulatorHost, 5001);
+      // Must precede any Auth/Firestore call below — an emulator override
+      // set after the first real request to either service is ignored.
+      await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
+      FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
       debugPrint(
-        'Recall: callables routed to the Functions emulator at '
-        '$_emulatorHost:5001',
+        'Recall: callables/Auth/Firestore routed to emulators at '
+        '$_emulatorHost',
       );
     }
+
+    // Anonymous — no login screen. Every Firestore path is scoped under this
+    // uid. This is single-device scope only: each install gets its own
+    // unlinked uid, so this does not sync across two physical devices (and
+    // is not guaranteed to survive a reinstall on Android specifically,
+    // since the credential lives in app-local storage that a reinstall
+    // wipes). A real identity provider is a drop-in upgrade later — nothing
+    // else here depends on the sign-in method being anonymous.
+    if (FirebaseAuth.instance.currentUser == null) {
+      await FirebaseAuth.instance.signInAnonymously();
+    }
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    final live = LiveFirestoreSyncService(
+      uid: uid,
+      noteRepository: DriftNoteRepository(database),
+      schedulingService: SchedulingService(
+        notificationService: notificationService,
+        workManagerService: const WorkManagerService(),
+        permissionService: const PermissionService(),
+      ),
+    );
+    await live.startListening();
+    syncService = live;
   });
 
   runApp(
@@ -130,6 +170,8 @@ Future<void> bootstrap() async {
       overrides: [
         appDatabaseProvider.overrideWithValue(database),
         notificationServiceProvider.overrideWithValue(notificationService),
+        if (syncService != null)
+          firestoreSyncServiceProvider.overrideWithValue(syncService!),
       ],
       child: const RecallApp(),
     ),

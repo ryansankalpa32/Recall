@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/providers/core_providers.dart';
@@ -17,7 +19,6 @@ enum CaptureStage { editing, parsing, confirming, saving }
 class NoteFormState {
   const NoteFormState({
     this.rawText = '',
-    this.pickedDateTime,
     this.stage = CaptureStage.editing,
     this.parsed,
     this.parseFailed = false,
@@ -26,10 +27,6 @@ class NoteFormState {
   });
 
   final String rawText;
-
-  /// A time the user picked by hand. Overrides anything the parser resolved,
-  /// and skips parsing entirely when set before the first submit.
-  final DateTime? pickedDateTime;
 
   final CaptureStage stage;
 
@@ -57,8 +54,6 @@ class NoteFormState {
 
   NoteFormState copyWith({
     String? rawText,
-    DateTime? pickedDateTime,
-    bool clearPickedDateTime = false,
     CaptureStage? stage,
     ParsedNote? parsed,
     bool clearParsed = false,
@@ -70,8 +65,6 @@ class NoteFormState {
   }) {
     return NoteFormState(
       rawText: rawText ?? this.rawText,
-      pickedDateTime:
-          clearPickedDateTime ? null : (pickedDateTime ?? this.pickedDateTime),
       stage: stage ?? this.stage,
       parsed: clearParsed ? null : (parsed ?? this.parsed),
       parseFailed: parseFailed ?? this.parseFailed,
@@ -113,35 +106,6 @@ class NoteFormController extends Notifier<NoteFormState> {
     );
   }
 
-  void setPickedDateTime(DateTime? dateTime) {
-    if (dateTime == null) {
-      state = state.copyWith(
-        clearPickedDateTime: true,
-        clearError: true,
-        clearNotice: true,
-      );
-      return;
-    }
-
-    // The backend refuses a parsed time in the past; the manual path had no
-    // equivalent guard, so a picked date of yesterday (or today at an hour
-    // already gone) saved happily and scheduled an alarm that can only fire
-    // immediately or never.
-    if (!dateTime.isAfter(DateTime.now())) {
-      state = state.copyWith(
-        clearError: true,
-        notice: 'That time has already passed — pick a later one.',
-      );
-      return;
-    }
-
-    state = state.copyWith(
-      pickedDateTime: dateTime,
-      clearError: true,
-      clearNotice: true,
-    );
-  }
-
   /// Returns to the text field from the confirmation card, keeping what was
   /// typed so the user can correct it.
   void backToEditing() {
@@ -159,16 +123,17 @@ class NoteFormController extends Notifier<NoteFormState> {
   /// means either that the flow moved on to the confirmation card, or that
   /// something failed and the sheet should stay open showing why.
   ///
-  /// A hand-picked time bypasses the parser completely: manual entry is fully
-  /// confident by construction, and Claude.md's show-before-commit rule governs
-  /// *AI-parsed* notes, so there is no interpretation to confirm.
+  /// There is no manual time entry in this build — every reminder time comes
+  /// from the AI parse. A prior parse failure bypasses the parser on this
+  /// attempt (saving as a plain, timeless note) so a note can always be
+  /// written with no backend reachable; see [NoteFormState.parseFailed].
   Future<bool> submit() async {
     if (!state.canSubmit) return false;
 
-    if (state.pickedDateTime != null || state.parseFailed) {
+    if (state.parseFailed) {
       return _persist(
         taskDescription: state.rawText.trim(),
-        resolvedDatetime: state.pickedDateTime,
+        resolvedDatetime: null,
         confidence: null,
       );
     }
@@ -182,11 +147,7 @@ class NoteFormController extends Notifier<NoteFormState> {
     final parsed = state.parsed;
     if (parsed == null || state.isBusy) return false;
 
-    // "Edit time" on the card overrides whatever the parser resolved, and makes
-    // the note manual again — hence a null confidence, matching Note's contract
-    // that confidence is only ever set by a parse.
-    final override = state.pickedDateTime;
-    final effective = override ?? parsed.resolvedDatetime;
+    final effective = parsed.resolvedDatetime;
 
     // The parse resolved against the clock at *parse* time, and this card can
     // sit on screen indefinitely. "take the pasta out in 2 minutes" plus a
@@ -201,7 +162,7 @@ class NoteFormController extends Notifier<NoteFormState> {
     return _persist(
       taskDescription: parsed.taskDescription,
       resolvedDatetime: effective,
-      confidence: override != null ? null : parsed.confidence,
+      confidence: parsed.confidence,
     );
   }
 
@@ -250,7 +211,9 @@ class NoteFormController extends Notifier<NoteFormState> {
     try {
       final now = DateTime.now();
       final hasTime = resolvedDatetime != null;
+      final sync = ref.read(firestoreSyncServiceProvider);
       final note = Note(
+        firestoreId: sync.reserveDocumentId(),
         rawText: state.rawText.trim(),
         taskDescription: taskDescription,
         triggerType: hasTime ? TriggerType.time : TriggerType.none,
@@ -263,6 +226,9 @@ class NoteFormController extends Notifier<NoteFormState> {
 
       final id = await ref.read(noteRepositoryProvider).insertNote(note);
       final saved = note.copyWith(id: id);
+      // Fire-and-forget: pushNote never throws (see FirestoreSyncService's
+      // doc comment) and must not gate the save on network reachability.
+      unawaited(sync.pushNote(saved));
 
       // Scheduling is deliberately outside the insert's failure path. Sharing
       // one try meant a scheduler throw left the row already written while

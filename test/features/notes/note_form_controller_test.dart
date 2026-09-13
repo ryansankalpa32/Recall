@@ -161,23 +161,6 @@ void main() {
     verifyNever(() => scheduling.scheduleReminder(any()));
   });
 
-  test('a hand-picked time bypasses the parser entirely', () async {
-    final when0 = secondsFromNow(const Duration(hours: 2));
-    final c = controller();
-    c.setRawText('call mum');
-    c.setPickedDateTime(when0);
-
-    expect(await c.submit(), isTrue);
-
-    final saved = await notes();
-    expect(saved.single.triggerType, TriggerType.time);
-    expect(saved.single.resolvedDatetime, when0);
-    expect(saved.single.confidence, isNull,
-        reason: 'manual entry is confident by construction');
-    verifyNever(() => parser.parse(any()));
-    verify(() => scheduling.scheduleReminder(any())).called(1);
-  });
-
   test('a failed parse degrades to the manual path instead of blocking',
       () async {
     when(() => parser.parse(any()))
@@ -239,26 +222,6 @@ void main() {
     expect(await notes(), isEmpty);
   });
 
-  test('editing the time on the confirmation card overrides the parse',
-      () async {
-    final parsedWhen = secondsFromNow(const Duration(hours: 2));
-    final chosenWhen = secondsFromNow(const Duration(days: 1));
-    when(() => parser.parse(any()))
-        .thenAnswer((_) async => timeParse(parsedWhen));
-
-    final c = controller();
-    c.setRawText('call mum at 4pm');
-    await c.submit();
-    c.setPickedDateTime(chosenWhen);
-
-    expect(await c.confirm(), isTrue);
-
-    final saved = await notes();
-    expect(saved.single.resolvedDatetime, chosenWhen);
-    expect(saved.single.confidence, isNull,
-        reason: 'an overridden time is no longer an AI interpretation');
-  });
-
   test('backToEditing() drops the interpretation but keeps the text', () async {
     final when0 = secondsFromNow(const Duration(hours: 2));
     when(() => parser.parse(any())).thenAnswer((_) async => timeParse(when0));
@@ -283,7 +246,6 @@ void main() {
 
     final state = formState();
     expect(state.rawText, isEmpty);
-    expect(state.pickedDateTime, isNull);
     expect(state.parsed, isNull);
     expect(state.stage, CaptureStage.editing);
     expect(state.parseFailed, isFalse);

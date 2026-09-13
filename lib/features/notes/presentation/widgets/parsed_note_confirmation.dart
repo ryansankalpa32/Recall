@@ -10,24 +10,21 @@ import 'trigger_type_icon.dart';
 ///
 /// Required by Claude.md — an AI-parsed trigger is never saved silently. The
 /// confidence is displayed but never acted on; branching on it is the Phase 7
-/// clarification loop, not this.
+/// clarification loop, not this. There is no way to hand-correct the time on
+/// this card — no manual time entry exists anywhere in this build (see
+/// `NoteFormController`) — so every card shown here is, by construction, an
+/// unmodified AI interpretation.
 class ParsedNoteConfirmation extends StatelessWidget {
   const ParsedNoteConfirmation({
     super.key,
     required this.parsed,
-    required this.overrideDateTime,
     required this.isSaving,
     this.notice,
     required this.onConfirm,
-    required this.onEditTime,
     required this.onBack,
   });
 
   final ParsedNote parsed;
-
-  /// A time the user picked by hand on this card, which wins over the parsed
-  /// one.
-  final DateTime? overrideDateTime;
 
   final bool isSaving;
 
@@ -37,14 +34,12 @@ class ParsedNoteConfirmation extends StatelessWidget {
   final String? notice;
 
   final VoidCallback onConfirm;
-  final VoidCallback onEditTime;
   final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final effectiveDateTime = overrideDateTime ?? parsed.resolvedDatetime;
-    final hasTime = effectiveDateTime != null;
+    final hasTime = parsed.resolvedDatetime != null;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -76,23 +71,21 @@ class ParsedNoteConfirmation extends StatelessWidget {
                         hasTime
                             ? DateFormat.yMMMEd()
                                 .add_jm()
-                                .format(effectiveDateTime)
+                                .format(parsed.resolvedDatetime!)
                             : 'No reminder — saved as a plain note',
                         style: theme.textTheme.bodyLarge,
                       ),
                     ),
                   ],
                 ),
-                if (overrideDateTime == null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Interpreted with '
-                    '${(parsed.confidence * 100).round()}% confidence',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                const SizedBox(height: 8),
+                Text(
+                  'Interpreted with '
+                  '${(parsed.confidence * 100).round()}% confidence',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -117,23 +110,9 @@ class ParsedNoteConfirmation extends StatelessWidget {
               : const Text('Confirm'),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: isSaving ? null : onEditTime,
-                icon: const Icon(Icons.schedule),
-                label: Text(hasTime ? 'Change time' : 'Set a time'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextButton(
-                onPressed: isSaving ? null : onBack,
-                child: const Text('Back'),
-              ),
-            ),
-          ],
+        TextButton(
+          onPressed: isSaving ? null : onBack,
+          child: const Text('Back'),
         ),
       ],
     );

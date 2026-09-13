@@ -95,4 +95,14 @@ class NoteTable extends Table {
 
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
+
+  /// The Firestore document id this note syncs to, under
+  /// `users/{uid}/notes`. Generated client-side (no network call) — see
+  /// `FirestoreSyncService.reserveDocumentId()` — at first local insert. Null
+  /// for notes created before this column existed, or when sync was
+  /// unavailable at insert time; `FirestoreSyncService`'s startup backfill
+  /// fills these in on next launch. The local autoincrement [id] above never
+  /// syncs — it can't, `flutter_local_notifications` needs it as a native
+  /// int — so this is a separate, purely additive identity.
+  TextColumn get firestoreId => text().nullable().unique()();
 }

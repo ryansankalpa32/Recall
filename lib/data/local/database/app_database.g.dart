@@ -645,6 +645,18 @@ class $NoteTableTable extends NoteTable
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _firestoreIdMeta = const VerificationMeta(
+    'firestoreId',
+  );
+  @override
+  late final GeneratedColumn<String> firestoreId = GeneratedColumn<String>(
+    'firestore_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -660,6 +672,7 @@ class $NoteTableTable extends NoteTable
     userPlaceId,
     createdAt,
     updatedAt,
+    firestoreId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -744,6 +757,15 @@ class $NoteTableTable extends NoteTable
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('firestore_id')) {
+      context.handle(
+        _firestoreIdMeta,
+        firestoreId.isAcceptableOrUnknown(
+          data['firestore_id']!,
+          _firestoreIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -813,6 +835,10 @@ class $NoteTableTable extends NoteTable
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      firestoreId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}firestore_id'],
+      ),
     );
   }
 
@@ -862,6 +888,16 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
   final int? userPlaceId;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// The Firestore document id this note syncs to, under
+  /// `users/{uid}/notes`. Generated client-side (no network call) — see
+  /// `FirestoreSyncService.reserveDocumentId()` — at first local insert. Null
+  /// for notes created before this column existed, or when sync was
+  /// unavailable at insert time; `FirestoreSyncService`'s startup backfill
+  /// fills these in on next launch. The local autoincrement [id] above never
+  /// syncs — it can't, `flutter_local_notifications` needs it as a native
+  /// int — so this is a separate, purely additive identity.
+  final String? firestoreId;
   const NoteRow({
     required this.id,
     required this.rawText,
@@ -876,6 +912,7 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     this.userPlaceId,
     required this.createdAt,
     required this.updatedAt,
+    this.firestoreId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -917,6 +954,9 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || firestoreId != null) {
+      map['firestore_id'] = Variable<String>(firestoreId);
+    }
     return map;
   }
 
@@ -947,6 +987,9 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
           : Value(userPlaceId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      firestoreId: firestoreId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(firestoreId),
     );
   }
 
@@ -973,6 +1016,7 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
       userPlaceId: serializer.fromJson<int?>(json['userPlaceId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      firestoreId: serializer.fromJson<String?>(json['firestoreId']),
     );
   }
   @override
@@ -994,6 +1038,7 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
       'userPlaceId': serializer.toJson<int?>(userPlaceId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'firestoreId': serializer.toJson<String?>(firestoreId),
     };
   }
 
@@ -1011,6 +1056,7 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     Value<int?> userPlaceId = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
+    Value<String?> firestoreId = const Value.absent(),
   }) => NoteRow(
     id: id ?? this.id,
     rawText: rawText ?? this.rawText,
@@ -1031,6 +1077,7 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     userPlaceId: userPlaceId.present ? userPlaceId.value : this.userPlaceId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    firestoreId: firestoreId.present ? firestoreId.value : this.firestoreId,
   );
   NoteRow copyWithCompanion(NoteTableCompanion data) {
     return NoteRow(
@@ -1063,6 +1110,9 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
           : this.userPlaceId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      firestoreId: data.firestoreId.present
+          ? data.firestoreId.value
+          : this.firestoreId,
     );
   }
 
@@ -1081,7 +1131,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
           ..write('status: $status, ')
           ..write('userPlaceId: $userPlaceId, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('firestoreId: $firestoreId')
           ..write(')'))
         .toString();
   }
@@ -1101,6 +1152,7 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     userPlaceId,
     createdAt,
     updatedAt,
+    firestoreId,
   );
   @override
   bool operator ==(Object other) =>
@@ -1118,7 +1170,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
           other.status == this.status &&
           other.userPlaceId == this.userPlaceId &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.firestoreId == this.firestoreId);
 }
 
 class NoteTableCompanion extends UpdateCompanion<NoteRow> {
@@ -1135,6 +1188,7 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
   final Value<int?> userPlaceId;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<String?> firestoreId;
   const NoteTableCompanion({
     this.id = const Value.absent(),
     this.rawText = const Value.absent(),
@@ -1149,6 +1203,7 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
     this.userPlaceId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.firestoreId = const Value.absent(),
   });
   NoteTableCompanion.insert({
     this.id = const Value.absent(),
@@ -1164,6 +1219,7 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
     this.userPlaceId = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
+    this.firestoreId = const Value.absent(),
   }) : rawText = Value(rawText),
        taskDescription = Value(taskDescription),
        triggerType = Value(triggerType),
@@ -1184,6 +1240,7 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
     Expression<int>? userPlaceId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<String>? firestoreId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1199,6 +1256,7 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
       if (userPlaceId != null) 'user_place_id': userPlaceId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (firestoreId != null) 'firestore_id': firestoreId,
     });
   }
 
@@ -1216,6 +1274,7 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
     Value<int?>? userPlaceId,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<String?>? firestoreId,
   }) {
     return NoteTableCompanion(
       id: id ?? this.id,
@@ -1231,6 +1290,7 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
       userPlaceId: userPlaceId ?? this.userPlaceId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      firestoreId: firestoreId ?? this.firestoreId,
     );
   }
 
@@ -1286,6 +1346,9 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (firestoreId.present) {
+      map['firestore_id'] = Variable<String>(firestoreId.value);
+    }
     return map;
   }
 
@@ -1304,7 +1367,8 @@ class NoteTableCompanion extends UpdateCompanion<NoteRow> {
           ..write('status: $status, ')
           ..write('userPlaceId: $userPlaceId, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('firestoreId: $firestoreId')
           ..write(')'))
         .toString();
   }
@@ -1635,7 +1699,7 @@ class $$UserPlaceTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$UserPlaceTableTable, UserPlaceRow>(table),
                   $$UserPlaceTableTableReferences(db, table, e),
                 ),
               )
@@ -1704,6 +1768,7 @@ typedef $$NoteTableTableCreateCompanionBuilder = NoteTableCompanion Function({
   Value<int?> userPlaceId,
   required DateTime createdAt,
   required DateTime updatedAt,
+  Value<String?> firestoreId,
 });
 typedef $$NoteTableTableUpdateCompanionBuilder = NoteTableCompanion Function({
   Value<int> id,
@@ -1719,6 +1784,7 @@ typedef $$NoteTableTableUpdateCompanionBuilder = NoteTableCompanion Function({
   Value<int?> userPlaceId,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
+  Value<String?> firestoreId,
 });
 
 final class $$NoteTableTableReferences
@@ -1820,6 +1886,11 @@ class $$NoteTableTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get firestoreId => $composableBuilder(
+    column: $table.firestoreId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$UserPlaceTableTableFilterComposer get userPlaceId {
     final $$UserPlaceTableTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -1913,6 +1984,11 @@ class $$NoteTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get firestoreId => $composableBuilder(
+    column: $table.firestoreId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$UserPlaceTableTableOrderingComposer get userPlaceId {
     final $$UserPlaceTableTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -1999,6 +2075,11 @@ class $$NoteTableTableAnnotationComposer
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  GeneratedColumn<String> get firestoreId => $composableBuilder(
+    column: $table.firestoreId,
+    builder: (column) => column,
+  );
+
   $$UserPlaceTableTableAnnotationComposer get userPlaceId {
     final $$UserPlaceTableTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -2065,6 +2146,7 @@ class $$NoteTableTableTableManager
                 Value<int?> userPlaceId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String?> firestoreId = const Value.absent(),
               }) => NoteTableCompanion(
                 id: id,
                 rawText: rawText,
@@ -2079,6 +2161,7 @@ class $$NoteTableTableTableManager
                 userPlaceId: userPlaceId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                firestoreId: firestoreId,
               ),
           createCompanionCallback:
               ({
@@ -2096,6 +2179,7 @@ class $$NoteTableTableTableManager
                 Value<int?> userPlaceId = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
+                Value<String?> firestoreId = const Value.absent(),
               }) => NoteTableCompanion.insert(
                 id: id,
                 rawText: rawText,
@@ -2110,11 +2194,12 @@ class $$NoteTableTableTableManager
                 userPlaceId: userPlaceId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                firestoreId: firestoreId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$NoteTableTable, NoteRow>(table),
                   $$NoteTableTableReferences(db, table, e),
                 ),
               )

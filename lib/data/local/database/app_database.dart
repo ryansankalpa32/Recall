@@ -31,7 +31,19 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (Migrator m, int from, int to) async {
+          // v2: adds NoteTable.firestoreId (the Firestore sync layer's
+          // document id). Existing rows get null here; FirestoreSyncService's
+          // startup backfill generates and pushes one for each on next launch.
+          if (from < 2) {
+            await m.addColumn(noteTable, noteTable.firestoreId);
+          }
+        },
+      );
 }
 
 QueryExecutor _openConnection() {

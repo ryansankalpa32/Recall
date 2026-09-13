@@ -28,6 +28,11 @@ class NoteDao extends DatabaseAccessor<AppDatabase> with _$NoteDaoMixin {
     return (select(noteTable)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
+  Future<NoteRow?> getNoteByFirestoreId(String firestoreId) {
+    return (select(noteTable)..where((t) => t.firestoreId.equals(firestoreId)))
+        .getSingleOrNull();
+  }
+
   Future<int> insertNote(NoteTableCompanion entry) =>
       into(noteTable).insert(entry);
 

@@ -7,6 +7,7 @@ abstract class NoteRepository {
   Stream<List<Note>> watchAllNotes();
   Stream<Note?> watchNote(int id);
   Future<Note?> getNote(int id);
+  Future<Note?> getNoteByFirestoreId(String firestoreId);
   Future<int> insertNote(Note note);
   Future<void> updateNote(Note note);
   Future<void> deleteNote(int id);
@@ -32,6 +33,12 @@ class DriftNoteRepository implements NoteRepository {
   }
 
   @override
+  Future<Note?> getNoteByFirestoreId(String firestoreId) async {
+    final row = await _db.noteDao.getNoteByFirestoreId(firestoreId);
+    return row == null ? null : _toDomain(row);
+  }
+
+  @override
   Future<int> insertNote(Note note) => _db.noteDao.insertNote(_toCompanion(note));
 
   @override
@@ -42,6 +49,7 @@ class DriftNoteRepository implements NoteRepository {
 
   Note _toDomain(NoteRow row) => Note(
         id: row.id,
+        firestoreId: row.firestoreId,
         rawText: row.rawText,
         taskDescription: row.taskDescription,
         triggerType: row.triggerType,
@@ -58,6 +66,7 @@ class DriftNoteRepository implements NoteRepository {
 
   NoteTableCompanion _toCompanion(Note note) => NoteTableCompanion(
         id: note.id == null ? const Value.absent() : Value(note.id!),
+        firestoreId: Value(note.firestoreId),
         rawText: Value(note.rawText),
         taskDescription: Value(note.taskDescription),
         triggerType: Value(note.triggerType),

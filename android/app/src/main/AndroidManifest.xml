@@ -1,4 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for every network call the app makes: the parseNote Cloud
+         Function (cloud_functions), App Check attestation, and Firebase init
+         itself. Without this, every one of those fails at the OS level with
+         no dialog and no prompt — it just throws, gets caught by
+         FirebaseRecallApiClient as a NoteParseException, and the capture
+         sheet silently degrades to the manual time picker. Easy to miss
+         because nothing else in this app needs a *normal* (non-runtime)
+         permission declared this explicitly. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Android 13+ runtime permission for showing notifications; requested
          contextually via NotificationService — not on app start. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
