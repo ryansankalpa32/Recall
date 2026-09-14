@@ -116,8 +116,8 @@ class _CaptureForm extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             formState.parseFailed
-                ? "Couldn't read a time from this note. Saving it as written, "
-                    'with no reminder.'
+                ? "Couldn't read a time from this note. Tap Save again to "
+                    'save as a plain note.'
                 : 'Could not save note: ${formState.error}',
             style: TextStyle(color: theme.colorScheme.error),
           ),
