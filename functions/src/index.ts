@@ -41,7 +41,7 @@ export const parseNote = onCall(
     secrets: [geminiKey],
     // Without this the endpoint is an open, paid Gemini relay for anyone who
     // finds the URL.
-    enforceAppCheck: true,
+    enforceAppCheck: process.env.FUNCTIONS_EMULATOR === "true" ? false : true,
     timeoutSeconds: 30,
   },
   async (request) => {

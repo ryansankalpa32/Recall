@@ -112,20 +112,24 @@ Future<void> bootstrap() async {
     // debug providers, whose token has to be registered in the console once.
     // The production providers are the shipping path; never ship the debug
     // ones, or the endpoint is unprotected again.
-    await FirebaseAppCheck.instance.activate(
-      providerAndroid: kDebugMode
-          ? AndroidDebugProvider(
-              debugToken:
-                  _appCheckDebugToken.isEmpty ? null : _appCheckDebugToken,
-            )
-          : const AndroidPlayIntegrityProvider(),
-      providerApple: kDebugMode
-          ? AppleDebugProvider(
-              debugToken:
-                  _appCheckDebugToken.isEmpty ? null : _appCheckDebugToken,
-            )
-          : const AppleDeviceCheckProvider(),
-    );
+    // Skip App Check when using the local emulator to avoid requiring a real
+    // Firebase project with App Check API enabled.
+    if (!_useFirebaseEmulator) {
+      await FirebaseAppCheck.instance.activate(
+        providerAndroid: kDebugMode
+            ? AndroidDebugProvider(
+                debugToken:
+                    _appCheckDebugToken.isEmpty ? null : _appCheckDebugToken,
+              )
+            : const AndroidPlayIntegrityProvider(),
+        providerApple: kDebugMode
+            ? AppleDebugProvider(
+                debugToken:
+                    _appCheckDebugToken.isEmpty ? null : _appCheckDebugToken,
+              )
+            : const AppleDeviceCheckProvider(),
+      );
+    }
 
     if (_useFirebaseEmulator) {
       FirebaseFunctions.instanceFor(region: _functionsRegion)
