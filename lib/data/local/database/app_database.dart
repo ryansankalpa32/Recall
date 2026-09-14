@@ -40,7 +40,7 @@ class AppDatabase extends _$AppDatabase {
           // document id). Existing rows get null here; FirestoreSyncService's
           // startup backfill generates and pushes one for each on next launch.
           if (from < 2) {
-            await m.addColumn(noteTable, noteTable.firestoreId);
+            await m.alterTable(TableMigration(noteTable));
           }
         },
       );
