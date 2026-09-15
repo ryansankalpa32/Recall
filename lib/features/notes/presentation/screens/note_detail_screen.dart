@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -17,15 +19,22 @@ class NoteDetailScreen extends ConsumerWidget {
     final repo = ref.read(noteRepositoryProvider);
     final note = await repo.getNote(noteId);
     if (note == null) return;
-    await repo.updateNote(
-      note.copyWith(status: NoteStatus.done, updatedAt: DateTime.now()),
-    );
+    final updated = note.copyWith(status: NoteStatus.done, updatedAt: DateTime.now());
+    await repo.updateNote(updated);
     await ref.read(schedulingServiceProvider).cancelReminder(noteId);
+    unawaited(ref.read(firestoreSyncServiceProvider).pushNote(updated));
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(noteRepositoryProvider);
+    // Fetched before deleting: pushDelete needs the note's firestoreId, which
+    // is gone from the local row the instant deleteNote runs.
+    final note = await repo.getNote(noteId);
     await ref.read(schedulingServiceProvider).cancelReminder(noteId);
-    await ref.read(noteRepositoryProvider).deleteNote(noteId);
+    await repo.deleteNote(noteId);
+    if (note != null) {
+      unawaited(ref.read(firestoreSyncServiceProvider).pushDelete(note));
+    }
     if (context.mounted) Navigator.of(context).pop();
   }
 

@@ -7,10 +7,12 @@ environment:
   sdk: ^3.13.1
 
 dependencies:
+  cloud_firestore: ^6.9.0
   cloud_functions: ^6.4.0
   drift: ^2.34.3
   drift_flutter: ^0.3.1
   firebase_app_check: ^0.4.7
+  firebase_auth: ^6.6.1
   firebase_core: ^4.14.0
   flutter:
     sdk: flutter
@@ -41,6 +43,11 @@ dev_dependencies:
   drift_dev: ^2.34.5
   build_runner: ^2.16.0
   mocktail: ^1.0.5
+  # In-memory Firestore for FirestoreSyncService's mapping/upsert tests.
+  # Its hasPendingWrites emulation is known to be imperfect, so the
+  # echo-suppression guarantee is verified against the real Firestore
+  # emulator instead — see functions/README.md and firestore_sync_service_test.dart.
+  fake_cloud_firestore: ^4.2.0
 
 flutter:
   uses-material-design: true

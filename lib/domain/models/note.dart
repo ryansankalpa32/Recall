@@ -14,6 +14,7 @@ import 'enums/trigger_type.dart';
 class Note {
   const Note({
     this.id,
+    this.firestoreId,
     required this.rawText,
     required this.taskDescription,
     required this.triggerType,
@@ -30,6 +31,14 @@ class Note {
 
   /// Null for a not-yet-persisted note.
   final int? id;
+
+  /// The Firestore document id this note syncs to, under
+  /// `users/{uid}/notes`. Null until [FirestoreSyncService.reserveDocumentId]
+  /// has been called for this note — either at creation, or by the startup
+  /// backfill for notes created before sync existed or while it was down.
+  /// Purely additive: [id] above is what every other subsystem (scheduling,
+  /// routing, notifications) keys off, and never leaves the device.
+  final String? firestoreId;
 
   /// What the user typed.
   final String rawText;
@@ -66,6 +75,7 @@ class Note {
 
   Note copyWith({
     int? id,
+    String? firestoreId,
     String? rawText,
     String? taskDescription,
     TriggerType? triggerType,
@@ -81,6 +91,7 @@ class Note {
   }) {
     return Note(
       id: id ?? this.id,
+      firestoreId: firestoreId ?? this.firestoreId,
       rawText: rawText ?? this.rawText,
       taskDescription: taskDescription ?? this.taskDescription,
       triggerType: triggerType ?? this.triggerType,

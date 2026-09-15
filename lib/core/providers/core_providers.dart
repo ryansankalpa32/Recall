@@ -8,6 +8,7 @@ import '../../features/scheduling/notification_service.dart';
 import '../../features/scheduling/permission_service.dart';
 import '../../features/scheduling/scheduling_service.dart';
 import '../../features/scheduling/workmanager_service.dart';
+import '../../features/sync/firestore_sync_service.dart';
 import '../../services/ai/backend_note_parser.dart';
 import '../../services/ai/note_parser.dart';
 import '../../services/backend/firebase_recall_api_client.dart';
@@ -61,4 +62,16 @@ final recallApiClientProvider = Provider<RecallApiClient>((ref) {
 /// never need Firebase initialized.
 final noteParserProvider = Provider<NoteParser>((ref) {
   return BackendNoteParser(ref.watch(recallApiClientProvider));
+});
+
+/// Syncs notes to Firestore alongside the local database (see
+/// `FirestoreSyncService`'s doc comment for why SQLite stays authoritative).
+///
+/// Defaults to a no-op so every existing test and any dev machine without
+/// Firebase configured keeps working unchanged — `bootstrap.dart` overrides
+/// this with a [LiveFirestoreSyncService] only after Firebase init and
+/// anonymous sign-in both succeed, matching that file's degrade-don't-crash
+/// contract.
+final firestoreSyncServiceProvider = Provider<FirestoreSyncService>((ref) {
+  return const NoopFirestoreSyncService();
 });

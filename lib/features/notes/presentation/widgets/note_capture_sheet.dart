@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../providers/note_form_controller.dart';
 import 'parsed_note_confirmation.dart';
@@ -10,9 +9,10 @@ import 'parsed_note_confirmation.dart';
 ///
 /// Phase 2 flow: type, tap Save, and the sheet swaps to a confirmation card
 /// showing what the parser understood (Claude.md: never save an AI-parsed
-/// trigger silently). Picking a time by hand skips parsing altogether, and a
-/// failed parse falls back to that same manual path so a note can always be
-/// saved.
+/// trigger silently). There is no manual time entry anywhere in this flow —
+/// a reminder time only ever comes from the AI parse. A failed parse falls
+/// back to saving the note as plain text with no reminder, so a note can
+/// always be saved regardless of whether the parser is reachable.
 class NoteCaptureSheet extends ConsumerWidget {
   const NoteCaptureSheet({super.key});
 
@@ -28,29 +28,6 @@ class NoteCaptureSheet extends ConsumerWidget {
       isScrollControlled: true,
       builder: (_) => const NoteCaptureSheet(),
     );
-  }
-
-  Future<void> _pickDateTime(BuildContext context, WidgetRef ref) async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: now,
-      // Today, not yesterday: a reminder can only be set for the future, and
-      // the controller rejects a past time anyway.
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: now.add(const Duration(days: 365 * 2)),
-    );
-    if (date == null || !context.mounted) return;
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(now),
-    );
-    if (time == null) return;
-
-    ref.read(noteFormControllerProvider.notifier).setPickedDateTime(
-          DateTime(date.year, date.month, date.day, time.hour, time.minute),
-        );
   }
 
   @override
@@ -83,18 +60,14 @@ class NoteCaptureSheet extends ConsumerWidget {
             when formState.parsed != null =>
           ParsedNoteConfirmation(
             parsed: formState.parsed!,
-            overrideDateTime: formState.pickedDateTime,
             isSaving: formState.stage == CaptureStage.saving,
             notice: formState.notice,
             onConfirm: () => close(controller.confirm()),
-            onEditTime: () => _pickDateTime(context, ref),
             onBack: controller.backToEditing,
           ),
         _ => _CaptureForm(
             formState: formState,
             onChanged: controller.setRawText,
-            onPickTime: () => _pickDateTime(context, ref),
-            onClearTime: () => controller.setPickedDateTime(null),
             onSubmit: () => close(controller.submit()),
           ),
       },
@@ -106,15 +79,11 @@ class _CaptureForm extends StatelessWidget {
   const _CaptureForm({
     required this.formState,
     required this.onChanged,
-    required this.onPickTime,
-    required this.onClearTime,
     required this.onSubmit,
   });
 
   final NoteFormState formState;
   final ValueChanged<String> onChanged;
-  final VoidCallback onPickTime;
-  final VoidCallback onClearTime;
   final VoidCallback onSubmit;
 
   @override
@@ -137,30 +106,6 @@ class _CaptureForm extends StatelessWidget {
           ),
           onChanged: onChanged,
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onPickTime,
-                icon: const Icon(Icons.schedule),
-                label: Text(
-                  formState.pickedDateTime == null
-                      ? 'Set a reminder time'
-                      : DateFormat.yMMMd()
-                          .add_jm()
-                          .format(formState.pickedDateTime!),
-                ),
-              ),
-            ),
-            if (formState.pickedDateTime != null)
-              IconButton(
-                tooltip: 'Clear time',
-                icon: const Icon(Icons.close),
-                onPressed: onClearTime,
-              ),
-          ],
-        ),
         if (formState.notice != null) ...[
           const SizedBox(height: 8),
           Text(
@@ -171,8 +116,8 @@ class _CaptureForm extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             formState.parseFailed
-                ? "Couldn't read a time from this note. Saving it as written — "
-                    'set a time above if you need a reminder.'
+                ? "Couldn't read a time from this note. Tap Save again to "
+                    'save as a plain note.'
                 : 'Could not save note: ${formState.error}',
             style: TextStyle(color: theme.colorScheme.error),
           ),
