@@ -11,7 +11,7 @@ import '../../features/scheduling/workmanager_service.dart';
 import '../../features/sync/firestore_sync_service.dart';
 import '../../services/ai/backend_note_parser.dart';
 import '../../services/ai/note_parser.dart';
-import '../../services/backend/firebase_recall_api_client.dart';
+import '../../services/backend/http_recall_api_client.dart';
 import '../../services/backend/recall_api_client.dart';
 
 /// The app's single [AppDatabase] instance — kept alive for the app's
@@ -49,10 +49,17 @@ final schedulingServiceProvider = Provider<SchedulingService>((ref) {
   );
 });
 
-/// The backend proxy client. Holds no secrets — the Gemini key lives in Cloud
-/// Secret Manager, injected into the `parseNote` callable (see `functions/`).
+/// The backend proxy client. Holds no secrets — the Gemini key lives on the
+/// standalone Node.js server as an environment variable.
+///
+/// The URL is configured via `--dart-define=BACKEND_URL=http://10.0.2.2:5001`
+/// (Android emulator) or similar. Defaults to `http://10.0.2.2:5001`.
 final recallApiClientProvider = Provider<RecallApiClient>((ref) {
-  return FirebaseRecallApiClient();
+  const backendUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: 'http://10.0.2.2:5001',
+  );
+  return HttpRecallApiClient(baseUrl: backendUrl);
 });
 
 /// Free-text note parsing (Phase 2, time intelligence).
