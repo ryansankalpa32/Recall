@@ -99,9 +99,11 @@ Future<void> bootstrap() async {
   // else.
   await _initQuietly('Firebase', 'free-text note parsing is unavailable',
       () async {
+    debugPrint('Recall: [1/6] Initializing Firebase...');
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    debugPrint('Recall: [2/6] Firebase.initializeApp() succeeded');
 
     // App Check is what stops the callable being an open, paid Gemini relay
     // for anyone who finds its URL.
@@ -131,6 +133,8 @@ Future<void> bootstrap() async {
       );
     }
 
+    debugPrint('Recall: [3/6] useFirebaseEmulator=$_useFirebaseEmulator, '
+        'emulatorHost=$_emulatorHost');
     if (_useFirebaseEmulator) {
       FirebaseFunctions.instanceFor(region: _functionsRegion)
           .useFunctionsEmulator(_emulatorHost, 5001);
@@ -144,6 +148,7 @@ Future<void> bootstrap() async {
       );
     }
 
+    debugPrint('Recall: [4/6] Signing in anonymously...');
     // Anonymous — no login screen. Every Firestore path is scoped under this
     // uid. This is single-device scope only: each install gets its own
     // unlinked uid, so this does not sync across two physical devices (and
@@ -155,6 +160,7 @@ Future<void> bootstrap() async {
       await FirebaseAuth.instance.signInAnonymously();
     }
     final uid = FirebaseAuth.instance.currentUser!.uid;
+    debugPrint('Recall: [5/6] Signed in as uid=$uid');
 
     final live = LiveFirestoreSyncService(
       uid: uid,
@@ -167,6 +173,7 @@ Future<void> bootstrap() async {
     );
     await live.startListening();
     syncService = live;
+    debugPrint('Recall: [6/6] FirestoreSyncService started — sync is LIVE');
   });
 
   runApp(

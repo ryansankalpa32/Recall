@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext (HTTP) traffic to the Firebase Emulator Suite.
+         The emulators serve over plain HTTP on localhost / LAN addresses.
+         This config is DEBUG-ONLY safe: release builds should strip or
+         restrict it further. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- USB-forwarded emulator (adb reverse) -->
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <!-- Android emulator host alias -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- localhost alias -->
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>
