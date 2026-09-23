@@ -57,7 +57,7 @@ final schedulingServiceProvider = Provider<SchedulingService>((ref) {
 final recallApiClientProvider = Provider<RecallApiClient>((ref) {
   const backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'http://10.0.2.2:5001',
+    defaultValue: 'http://10.10.7.228:5001',
   );
   return HttpRecallApiClient(baseUrl: backendUrl);
 });

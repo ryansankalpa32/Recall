@@ -90,14 +90,11 @@ Future<void> bootstrap() async {
   // or keeps its no-op default.
   FirestoreSyncService? syncService;
 
-  // Firebase backs the note parser (the `parseNote` callable proxies Gemini
-  // — see `functions/`) and the Firestore sync layer. Without it the app
-  // still runs: the capture sheet falls back to saving a plain, timeless
-  // note (no AI parser reachable), and notes simply stay local-only (no
-  // sync). So this is another degrade-don't-crash init, and it is also why a
-  // dev without a configured Firebase project can still work on everything
-  // else.
-  await _initQuietly('Firebase', 'free-text note parsing is unavailable',
+  // Firebase backs the Firestore sync layer. Without it the app
+  // still runs: notes simply stay local-only (no sync). So this is another
+  // degrade-don't-crash init, and it is also why a dev without a configured
+  // Firebase project can still work on everything else.
+  await _initQuietly('Firebase', 'Firestore sync is unavailable',
       () async {
     debugPrint('Recall: [1/6] Initializing Firebase...');
     await Firebase.initializeApp(
