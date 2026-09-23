@@ -25,7 +25,7 @@ if (!geminiApiKey) {
  * so this rather than a lite variant; `gemini-3.5-flash-lite` is the cost
  * step-down if call volume ever justifies it.
  */
-const MODEL = "gemini-3.8-flash";
+const MODEL = "gemini-3.5-flash-lite";
 
 const app = express();
 app.use(cors());
