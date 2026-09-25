@@ -18,6 +18,8 @@ import 'features/scheduling/scheduling_service.dart';
 import 'features/scheduling/workmanager_service.dart';
 import 'features/sync/firestore_sync_service.dart';
 import 'firebase_options.dart';
+import 'services/backend/http_recall_api_client.dart';
+import 'services/fcm/fcm_service.dart';
 
 /// Region the `parseNote` callable is deployed to. Must match the `region` in
 /// `functions/src/index.ts` and the one `FirebaseRecallApiClient` asks for —
@@ -74,11 +76,11 @@ Future<void> bootstrap() async {
   // initialize them must not stop the app booting — notes CRUD and "My
   // places" work fine without a scheduler, and time reminders are the only
   // thing degraded. Surfaced as a debug log rather than swallowed silently.
-  await _initQuietly(
-    'WorkManager',
-    'time reminders may not fire',
-    () => const WorkManagerService().init(),
-  );
+  // await _initQuietly(
+  //   'WorkManager',
+  //   'time reminders may not fire',
+  //   () => const WorkManagerService().init(),
+  // );
   await _initQuietly(
     'notifications',
     'time reminders may not fire',
@@ -158,6 +160,21 @@ Future<void> bootstrap() async {
     }
     final uid = FirebaseAuth.instance.currentUser!.uid;
     debugPrint('Recall: [5/6] Signed in as uid=$uid');
+
+    try {
+      final fcmService = FcmService(
+        HttpRecallApiClient(
+          baseUrl: const String.fromEnvironment(
+            'BACKEND_URL',
+            defaultValue: 'http://10.10.7.228:5001',
+          ),
+        ),
+      );
+      await fcmService.init();
+      debugPrint('Recall: [5.5/6] FCM token registered');
+    } catch (e, st) {
+      debugPrint('Recall: [5.5/6] FCM init failed: $e\n$st');
+    }
 
     final live = LiveFirestoreSyncService(
       uid: uid,

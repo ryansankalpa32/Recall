@@ -101,33 +101,13 @@ class SchedulingService {
     final notificationsAllowed =
         await permissionService.requestNotificationPermission();
 
-    final delay = scheduledDate.difference(DateTime.now());
-    if (delay <= _exactScheduleThreshold) {
-      final exactGranted = await notificationService.requestExactAlarmsPermission();
-      final canUseExact = exactGranted && await notificationService.canScheduleExactAlarms();
-      await notificationService.scheduleNoteReminder(
-        noteId: noteId,
-        title: 'Recall',
-        body: note.taskDescription,
-        scheduledDate: scheduledDate,
-        useExactAlarm: canUseExact,
-      );
-      return ReminderOutcome(
-        notificationsAllowed: notificationsAllowed,
-        delivery: canUseExact
-            ? ReminderDelivery.exactAlarm
-            : ReminderDelivery.inexactAlarm,
-      );
-    } else {
-      await workManagerService.scheduleNoteReminder(
-        noteId: noteId,
-        scheduledDate: scheduledDate,
-      );
-      return ReminderOutcome(
-        notificationsAllowed: notificationsAllowed,
-        delivery: ReminderDelivery.deferredWork,
-      );
-    }
+    // Phase 2 server-side scheduling: The Node.js backend handles all polling
+    // and sends an FCM push notification. We bypass WorkManager and local
+    // exact alarms entirely.
+    return ReminderOutcome(
+      notificationsAllowed: notificationsAllowed,
+      delivery: ReminderDelivery.deferredWork, // Semantic stand-in
+    );
   }
 
   /// Cancels any pending delivery for [noteId] — called when a note is

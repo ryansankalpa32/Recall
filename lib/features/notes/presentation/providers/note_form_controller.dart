@@ -226,9 +226,15 @@ class NoteFormController extends Notifier<NoteFormState> {
 
       final id = await ref.read(noteRepositoryProvider).insertNote(note);
       final saved = note.copyWith(id: id);
-      // Fire-and-forget: pushNote never throws (see FirestoreSyncService's
-      // doc comment) and must not gate the save on network reachability.
-      unawaited(sync.pushNote(saved));
+      
+      // Send to backend API so it can handle server-side timestamp conversion
+      // and initialize notification flags. If offline, fall back to the direct
+      // Firestore sync (which we'll also update to include notificationSent: false).
+      try {
+        await ref.read(recallApiClientProvider).saveNote(saved);
+      } catch (_) {
+        unawaited(sync.pushNote(saved));
+      }
 
       // Scheduling is deliberately outside the insert's failure path. Sharing
       // one try meant a scheduler throw left the row already written while

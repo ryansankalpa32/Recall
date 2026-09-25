@@ -66,3 +66,6 @@ macos/Runner/GoogleService-Info.plist
 android/key.properties
 android/**/*.keystore
 android/**/*.jks
+recall-cfeb3-firebase-adminsdk-fbsvc-ae9a85cac1.json
+server/serviceAccountKey.json
+
