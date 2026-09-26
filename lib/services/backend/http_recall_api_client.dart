@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 
+import '../../domain/models/note.dart';
 import '../ai/note_parser.dart';
 import 'recall_api_client.dart';
 
@@ -94,6 +96,89 @@ class HttpRecallApiClient implements RecallApiClient {
     }
 
     return _toParsedNote(data);
+  }
+
+  @override
+  Future<String> saveNote(Note note) async {
+    final String timeZone;
+    try {
+      timeZone = (await FlutterTimezone.getLocalTimezone()).identifier;
+    } catch (error) {
+      throw NoteParseException('Could not read the device timezone: $error');
+    }
+
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (token == null) {
+      throw Exception('User is not authenticated');
+    }
+
+    final uri = Uri.parse('$baseUrl/api/notes');
+    
+    // We only send exactly what the backend API expects based on CreateNoteSchema
+    final body = jsonEncode({
+      'firestoreId': note.firestoreId,
+      'rawText': note.rawText,
+      'taskDescription': note.taskDescription,
+      'triggerType': note.triggerType,
+      'locationKind': note.locationKind,
+      'locationValue': note.locationValue,
+      'resolvedDatetime': note.resolvedDatetime != null ? _localIso(note.resolvedDatetime!) : null,
+      'recurrenceRule': note.recurrenceRule,
+      'confidence': note.confidence,
+      'timeZone': timeZone,
+    });
+
+    final HttpClientResponse response;
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 30);
+      final request = await client.postUrl(uri);
+      request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      request.write(body);
+      response = await request.close();
+    } catch (error) {
+      throw Exception('Could not reach the backend: $error');
+    }
+
+    final responseBody = await response.transform(utf8.decoder).join();
+
+    if (response.statusCode != 201) {
+      throw Exception('Server returned ${response.statusCode}: $responseBody');
+    }
+    
+    final json = jsonDecode(responseBody) as Map<String, dynamic>;
+    return json['noteId'] as String;
+  }
+
+  @override
+  Future<void> registerFcmToken(String fcmToken) async {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (token == null) {
+      throw Exception('User is not authenticated');
+    }
+
+    final uri = Uri.parse('$baseUrl/api/fcm-token');
+    final body = jsonEncode({'token': fcmToken});
+
+    final HttpClientResponse response;
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 30);
+      final request = await client.postUrl(uri);
+      request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      request.headers.set('x-platform', Platform.operatingSystem);
+      request.write(body);
+      response = await request.close();
+    } catch (error) {
+      throw Exception('Could not reach the backend: $error');
+    }
+
+    if (response.statusCode != 200) {
+      final responseBody = await response.transform(utf8.decoder).join();
+      throw Exception('Server returned ${response.statusCode}: $responseBody');
+    }
   }
 
   @override

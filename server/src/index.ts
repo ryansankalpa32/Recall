@@ -11,6 +11,9 @@ import {
   ParseResultSchema,
   toParsedNoteResponse,
 } from "./schema";
+import noteRoutes from "./routes/noteRoutes";
+import fcmRoutes from "./routes/fcmRoutes";
+import { startReminderScheduler } from "./jobs/reminderScheduler";
 
 const PORT = parseInt(process.env.PORT ?? "5001", 10);
 
@@ -30,6 +33,9 @@ const MODEL = "gemini-3.5-flash-lite";
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+app.use("/api", noteRoutes);
+app.use("/api", fcmRoutes);
 
 /** Health check — handy for uptime monitors on Render / Railway. */
 app.get("/", (_req, res) => {
@@ -122,4 +128,5 @@ app.post("/parse-note", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`recall-server listening on http://localhost:${PORT}`);
+  startReminderScheduler();
 });

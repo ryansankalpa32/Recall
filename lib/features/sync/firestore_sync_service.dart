@@ -204,6 +204,7 @@ class LiveFirestoreSyncService implements FirestoreSyncService {
         'recurrenceRule': note.recurrenceRule,
         'confidence': note.confidence,
         'status': note.status.name,
+        'notificationSent': false,
         'createdAt': Timestamp.fromDate(note.createdAt),
         'updatedAt': Timestamp.fromDate(note.updatedAt),
       };
