@@ -166,7 +166,7 @@ Future<void> bootstrap() async {
         HttpRecallApiClient(
           baseUrl: const String.fromEnvironment(
             'BACKEND_URL',
-            defaultValue: 'http://10.10.7.228:5001',
+            defaultValue: 'http://10.10.105.168:5001',
           ),
         ),
       );
