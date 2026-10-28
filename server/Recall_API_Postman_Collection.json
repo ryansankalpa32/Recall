@@ -1,0 +1,133 @@
+{
+  "info": {
+    "_postman_id": "recall-server-api-collection",
+    "name": "Recall Backend API",
+    "description": "Collection for testing Recall Node.js Express Backend APIs (parse-note, Firestore note creation, FCM token registration, health check).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5001",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": ["{{baseUrl}}"],
+          "path": [""]
+        },
+        "description": "Check if the server is up and responsive."
+      },
+      "response": []
+    },
+    {
+      "name": "2. AI Parse Note (Gemini)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rawText\": \"call mum tomorrow at 4pm\",\n  \"now\": \"2026-10-28T14:00:00\",\n  \"timeZone\": \"Asia/Colombo\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/parse-note",
+          "host": ["{{baseUrl}}"],
+          "path": ["parse-note"]
+        },
+        "description": "Parses free-text notes into tasks and ISO-8601 local wall-clock reminder times via Gemini 3.5 Flash Lite."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Register FCM Token (Requires Auth)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{authToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "x-platform",
+            "value": "android",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"sample_device_fcm_token_1234567890_abcdefghij\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/fcm-token",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "fcm-token"]
+        },
+        "description": "Registers device FCM token under users/{uid}/fcmTokens in Firestore for background push reminders."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Create Note (Requires Auth)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{authToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rawText\": \"doctor appointment tomorrow at 10am\",\n  \"taskDescription\": \"doctor appointment\",\n  \"triggerType\": \"time\",\n  \"locationKind\": null,\n  \"locationValue\": null,\n  \"resolvedDatetime\": \"2026-10-29T10:00:00\",\n  \"recurrenceRule\": null,\n  \"confidence\": 0.95,\n  \"timeZone\": \"Asia/Colombo\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/notes",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "notes"]
+        },
+        "description": "Stores a scheduled or pending note in Firestore under users/{uid}/notes. When resolvedDatetime arrives, the server cron job dispatches an FCM push notification."
+      },
+      "response": []
+    }
+  ]
+}
