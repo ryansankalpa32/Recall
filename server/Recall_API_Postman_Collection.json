@@ -128,6 +128,40 @@
         "description": "Stores a scheduled or pending note in Firestore under users/{uid}/notes. When resolvedDatetime arrives, the server cron job dispatches an FCM push notification."
       },
       "response": []
+    },
+    {
+      "name": "5. Quick Create Note (Parse & Save in 1 Call - Requires Auth)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{authToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rawText\": \"call dentist tomorrow at 3pm\",\n  \"now\": \"2026-10-28T21:45:00\",\n  \"timeZone\": \"Asia/Colombo\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/notes/quick-create",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "notes", "quick-create"]
+        },
+        "description": "Convenience endpoint for testing: parses the free-text note with Gemini and immediately commits the scheduled reminder to Firestore under users/{uid}/notes."
+      },
+      "response": []
     }
   ]
 }
