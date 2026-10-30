@@ -19,6 +19,52 @@
   ],
   "item": [
     {
+      "name": "0. Get Auth Token (Auto-Sets authToken Variable)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res.idToken) {",
+              "    pm.collectionVariables.set('authToken', res.idToken);",
+              "    console.log('authToken updated in collection variables:', res.idToken);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"returnSecureToken\": true\n}"
+        },
+        "url": {
+          "raw": "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyB3uJ4pvIWgiIKJvhy31v2vWNp-3fleWqw",
+          "protocol": "https",
+          "host": ["identitytoolkit", "googleapis", "com"],
+          "path": ["v1", "accounts:signUp"],
+          "query": [
+            {
+              "key": "key",
+              "value": "AIzaSyB3uJ4pvIWgiIKJvhy31v2vWNp-3fleWqw"
+            }
+          ]
+        },
+        "description": "Calls Google Identity Toolkit to obtain a fresh Firebase Auth ID token. When you click Send, the test script automatically saves the token to the 'authToken' collection variable so all other requests work immediately!"
+      },
+      "response": []
+    },
+    {
       "name": "1. Health Check",
       "request": {
         "method": "GET",

@@ -10,6 +10,7 @@
     "build": "tsc",
     "start": "node lib/src/index.js",
     "dev": "concurrently \"tsc --watch\" \"node --watch lib/src/index.js\"",
+    "get-token": "npm run build && node scratch/getToken.js",
     "test": "npm run build && node --test \"lib/test/**/*.test.js\""
   },
   "dependencies": {
