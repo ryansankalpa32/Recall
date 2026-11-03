@@ -56,7 +56,7 @@ class FcmService {
   }
 
   Future<void> _registerToken(String token) async {
-    debugPrint('Recall: Registering FCM token: ${token.substring(0, 10)}...');
+    ddebugPrint('Recall: FULL FCM TOKEN:\n$token');
     try {
       await _apiClient.registerFcmToken(token);
     } catch (e) {
