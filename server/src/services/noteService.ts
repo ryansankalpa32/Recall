@@ -1,13 +1,6 @@
 import { db } from "../config/firebase";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
-
-/** UTC offset string for well-known IANA zones used by Sri Lankan users. */
-const TIMEZONE_OFFSETS: Record<string, string> = {
-  "Asia/Colombo": "+05:30",
-  "Asia/Kolkata": "+05:30",
-  "UTC": "+00:00",
-  "Etc/UTC": "+00:00",
-};
+import { localWallClockToUtc } from "../localTime";
 
 /**
  * Interprets a local wall-clock datetime string (e.g. `2026-09-25T15:00:00`)
@@ -15,22 +8,14 @@ const TIMEZONE_OFFSETS: Record<string, string> = {
  *
  * The string carries no offset or `Z` — the same ISO-8601 local format that
  * the parse-note endpoint and the Flutter client both use (see `_localIso` in
- * `http_recall_api_client.dart`). Appending the zone's UTC offset before
- * handing it to `Date()` makes the conversion unambiguous regardless of what
- * timezone the server process happens to run in.
+ * `http_recall_api_client.dart`). Any IANA zone works, including DST; an
+ * invalid zone or datetime throws rather than guessing.
  */
 function localDatetimeToTimestamp(
   datetime: string,
   timeZone: string,
 ): Timestamp {
-  const offset = TIMEZONE_OFFSETS[timeZone] || "+05:30"; // default to Sri Lanka
-  const utcDate = new Date(`${datetime}${offset}`);
-
-  if (isNaN(utcDate.getTime())) {
-    throw new Error(`Invalid datetime: ${datetime}`);
-  }
-
-  return Timestamp.fromDate(utcDate);
+  return Timestamp.fromDate(localWallClockToUtc(datetime, timeZone));
 }
 
 export interface CreateNoteData {
