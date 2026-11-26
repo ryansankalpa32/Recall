@@ -11,6 +11,17 @@ import '../../features/places/presentation/screens/place_edit_screen.dart';
 class AppRoutes {
   const AppRoutes._();
 
+  /// Lets code with no [BuildContext] (notification and push taps) navigate.
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
+  /// Opens a note's detail screen from outside the widget tree. Does nothing
+  /// if the app's navigator isn't mounted yet.
+  static void openNoteDetail(int noteId) {
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (_) => NoteDetailScreen(noteId: noteId)),
+    );
+  }
+
   static Future<void> pushNoteDetail(BuildContext context, int noteId) {
     return Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => NoteDetailScreen(noteId: noteId)),

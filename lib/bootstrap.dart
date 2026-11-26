@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/providers/core_providers.dart';
+import 'core/routing/app_routes.dart';
 import 'data/local/database/app_database.dart';
 import 'data/repositories/note_repository.dart';
 import 'features/scheduling/notification_service.dart';
@@ -81,6 +82,9 @@ Future<void> bootstrap() async {
   //   'time reminders may not fire',
   //   () => const WorkManagerService().init(),
   // );
+  // Tapping a reminder opens its note. Set before init so a tap delivered
+  // during init isn't lost.
+  notificationService.onNoteTapped = AppRoutes.openNoteDetail;
   await _initQuietly(
     'notifications',
     'time reminders may not fire',
@@ -206,6 +210,29 @@ Future<void> bootstrap() async {
       child: const RecallApp(),
     ),
   );
+
+  // Cold-start taps can only navigate once the navigator exists.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    try {
+      final launchedFor = await notificationService.launchNoteId();
+      if (launchedFor != null) AppRoutes.openNoteDetail(launchedFor);
+    } catch (e) {
+      debugPrint('Recall: could not read notification launch details: $e');
+    }
+
+    final repository = DriftNoteRepository(database);
+    try {
+      await fcmService?.listenForMessages(PushHandlers(
+        localIdForFirestoreId: (firestoreId) async =>
+            (await repository.getNoteByFirestoreId(firestoreId))?.id,
+        show: (noteId, title, body) => notificationService.showImmediate(
+            noteId: noteId, title: title, body: body),
+        open: AppRoutes.openNoteDetail,
+      ));
+    } catch (e) {
+      debugPrint('Recall: FCM message handling unavailable: $e');
+    }
+  });
 }
 
 Future<void> _initQuietly(

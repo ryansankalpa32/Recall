@@ -28,6 +28,61 @@ class FcmService {
   bool _initialized = false;
   bool _registered = false;
   StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<RemoteMessage>? _foregroundSub;
+  StreamSubscription<RemoteMessage>? _openedSub;
+
+  /// Wires up foreground display and tap-to-open for reminder pushes.
+  ///
+  /// Android doesn't display an FCM notification while the app is in the
+  /// foreground, so [onForegroundMessage] shows it locally instead. Taps
+  /// (from background or a cold start) route to the note via [onPushTapped].
+  Future<void> listenForMessages(PushHandlers handlers) async {
+    if (!_isMobile) return;
+    _foregroundSub ??= FirebaseMessaging.onMessage.listen((m) =>
+        onForegroundMessage(handlers, m.data,
+            title: m.notification?.title, body: m.notification?.body));
+    _openedSub ??= FirebaseMessaging.onMessageOpenedApp
+        .listen((m) => onPushTapped(handlers, m.data));
+    final initial = await FirebaseMessaging.instance.getInitialMessage();
+    if (initial != null) await onPushTapped(handlers, initial.data);
+  }
+
+  /// Shows a reminder push that arrived while the app was open, under the
+  /// note's local id (so it replaces, rather than stacks on, any local
+  /// notification for the same note).
+  @visibleForTesting
+  static Future<void> onForegroundMessage(
+    PushHandlers handlers,
+    Map<String, dynamic> data, {
+    String? title,
+    String? body,
+  }) async {
+    if (data['type'] != 'reminder') return;
+    final localId = await _localIdFor(handlers, data);
+    if (localId == null) return;
+    await handlers.show(localId, title ?? 'Recall', body ?? 'You have a reminder');
+  }
+
+  /// Opens the note a tapped reminder push refers to.
+  @visibleForTesting
+  static Future<void> onPushTapped(
+    PushHandlers handlers,
+    Map<String, dynamic> data,
+  ) async {
+    if (data['type'] != 'reminder') return;
+    final localId = await _localIdFor(handlers, data);
+    if (localId != null) handlers.open(localId);
+  }
+
+  /// Pushes carry the Firestore id; the app works with local ids.
+  static Future<int?> _localIdFor(
+    PushHandlers handlers,
+    Map<String, dynamic> data,
+  ) async {
+    final firestoreId = data['noteId'];
+    if (firestoreId is! String || firestoreId.isEmpty) return null;
+    return handlers.localIdForFirestoreId(firestoreId);
+  }
 
   bool get _isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
@@ -83,5 +138,27 @@ class FcmService {
 
   void dispose() {
     _tokenRefreshSub?.cancel();
+    _foregroundSub?.cancel();
+    _openedSub?.cancel();
   }
+}
+
+/// What [FcmService] needs from the rest of the app to act on a push, kept
+/// as plain callbacks so the push logic is testable without Firebase.
+class PushHandlers {
+  const PushHandlers({
+    required this.localIdForFirestoreId,
+    required this.show,
+    required this.open,
+  });
+
+  /// The local note id for a Firestore note id, or null if it isn't synced
+  /// to this device (yet).
+  final Future<int?> Function(String firestoreId) localIdForFirestoreId;
+
+  /// Shows a notification for the note with this local id.
+  final Future<void> Function(int noteId, String title, String body) show;
+
+  /// Opens the note's detail screen.
+  final void Function(int noteId) open;
 }

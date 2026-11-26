@@ -19,6 +19,16 @@ class NotificationService {
 
   bool _initialized = false;
 
+  /// Called with the local note id when the user taps a reminder while the
+  /// app is running. Set before [init].
+  void Function(int noteId)? onNoteTapped;
+
+  /// Payloads look like `note:<local id>`.
+  static int? noteIdFromPayload(String? payload) {
+    if (payload == null || !payload.startsWith('note:')) return null;
+    return int.tryParse(payload.substring(5));
+  }
+
   Future<void> init() async {
     if (_initialized) return;
 
@@ -31,6 +41,10 @@ class NotificationService {
     await _plugin.initialize(
       settings:
           const InitializationSettings(android: androidInit, iOS: iosInit),
+      onDidReceiveNotificationResponse: (response) {
+        final id = noteIdFromPayload(response.payload);
+        if (id != null) onNoteTapped?.call(id);
+      },
     );
 
     const androidChannel = AndroidNotificationChannel(
@@ -129,6 +143,13 @@ class NotificationService {
       ),
       payload: 'note:$noteId',
     );
+  }
+
+  /// The note whose reminder was tapped to cold-start the app, if any.
+  Future<int?> launchNoteId() async {
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details == null || !details.didNotificationLaunchApp) return null;
+    return noteIdFromPayload(details.notificationResponse?.payload);
   }
 
   Future<void> cancel(int noteId) => _plugin.cancel(id: noteId);
