@@ -121,7 +121,8 @@ class HttpRecallApiClient implements RecallApiClient {
       'taskDescription': note.taskDescription,
       'triggerType': note.triggerType,
       'locationKind': note.locationKind,
-      'locationValue': note.locationValue,
+      // Note has no locationValue field yet (Phase 3).
+      'locationValue': null,
       'resolvedDatetime': note.resolvedDatetime != null ? _localIso(note.resolvedDatetime!) : null,
       'recurrenceRule': note.recurrenceRule,
       'confidence': note.confidence,

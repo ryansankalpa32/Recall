@@ -56,7 +56,9 @@ class FcmService {
   }
 
   Future<void> _registerToken(String token) async {
-    ddebugPrint('Recall: FULL FCM TOKEN:\n$token');
+    // Never log the full token: it is a push credential for this device.
+    debugPrint('Recall: Registering FCM token: '
+        '${token.length > 10 ? token.substring(0, 10) : token}...');
     try {
       await _apiClient.registerFcmToken(token);
     } catch (e) {

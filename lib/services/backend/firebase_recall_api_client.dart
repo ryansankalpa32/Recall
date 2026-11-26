@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 
+import '../../domain/models/note.dart';
 import '../ai/note_parser.dart';
 import 'recall_api_client.dart';
 
@@ -64,6 +65,18 @@ class FirebaseRecallApiClient implements RecallApiClient {
     }
 
     return _toParsedNote(data);
+  }
+
+  // Legacy client: the app now uses HttpRecallApiClient against `server/`.
+  // These exist only so this class still satisfies the interface.
+  @override
+  Future<String> saveNote(Note note) {
+    throw UnimplementedError('Legacy client: use HttpRecallApiClient.');
+  }
+
+  @override
+  Future<void> registerFcmToken(String token) {
+    throw UnimplementedError('Legacy client: use HttpRecallApiClient.');
   }
 
   @override
