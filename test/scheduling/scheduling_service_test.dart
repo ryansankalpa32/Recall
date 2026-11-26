@@ -6,27 +6,21 @@ import 'package:recall/domain/models/note.dart';
 import 'package:recall/features/scheduling/notification_service.dart';
 import 'package:recall/features/scheduling/permission_service.dart';
 import 'package:recall/features/scheduling/scheduling_service.dart';
-import 'package:recall/features/scheduling/workmanager_service.dart';
 
 class MockNotificationService extends Mock implements NotificationService {}
-
-class MockWorkManagerService extends Mock implements WorkManagerService {}
 
 class MockPermissionService extends Mock implements PermissionService {}
 
 void main() {
   late MockNotificationService notificationService;
-  late MockWorkManagerService workManagerService;
   late MockPermissionService permissionService;
   late SchedulingService scheduling;
 
   setUp(() {
     notificationService = MockNotificationService();
-    workManagerService = MockWorkManagerService();
     permissionService = MockPermissionService();
     scheduling = SchedulingService(
       notificationService: notificationService,
-      workManagerService: workManagerService,
       permissionService: permissionService,
     );
 
@@ -43,13 +37,7 @@ void main() {
           scheduledDate: any(named: 'scheduledDate'),
           useExactAlarm: any(named: 'useExactAlarm'),
         )).thenAnswer((_) async {});
-    when(() => workManagerService.scheduleNoteReminder(
-          noteId: any(named: 'noteId'),
-          scheduledDate: any(named: 'scheduledDate'),
-        )).thenAnswer((_) async {});
     when(() => notificationService.cancel(any())).thenAnswer((_) async {});
-    when(() => workManagerService.cancelNoteReminder(any()))
-        .thenAnswer((_) async {});
   });
 
   Note buildNote(DateTime scheduledFor) {
@@ -81,13 +69,9 @@ void main() {
           scheduledDate: any(named: 'scheduledDate'),
           useExactAlarm: true,
         )).called(1);
-    verifyNever(() => workManagerService.scheduleNoteReminder(
-          noteId: any(named: 'noteId'),
-          scheduledDate: any(named: 'scheduledDate'),
-        ));
   });
 
-  test('far-out reminders use an inexact local alarm, not WorkManager',
+  test('far-out reminders use an inexact local alarm',
       () async {
     final note = buildNote(DateTime.now().add(const Duration(days: 3)));
 
@@ -106,10 +90,6 @@ void main() {
           useExactAlarm: false,
         )).called(1);
     verifyNever(() => notificationService.requestExactAlarmsPermission());
-    verifyNever(() => workManagerService.scheduleNoteReminder(
-          noteId: any(named: 'noteId'),
-          scheduledDate: any(named: 'scheduledDate'),
-        ));
   });
 
   test('near-term without exact-alarm allowance falls back with a caveat',
@@ -131,18 +111,7 @@ void main() {
         )).called(1);
   });
 
-  test('cancelReminder cancels the local alarm and legacy WorkManager task',
-      () async {
-    await scheduling.cancelReminder(1);
-
-    verify(() => notificationService.cancel(1)).called(1);
-    verify(() => workManagerService.cancelNoteReminder(1)).called(1);
-  });
-
-  test('cancelReminder tolerates an uninitialized WorkManager', () async {
-    when(() => workManagerService.cancelNoteReminder(any()))
-        .thenThrow(StateError('WorkManager not initialized'));
-
+  test('cancelReminder cancels the local alarm', () async {
     await scheduling.cancelReminder(1);
 
     verify(() => notificationService.cancel(1)).called(1);

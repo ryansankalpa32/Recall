@@ -20,7 +20,6 @@ import 'features/scheduling/notification_service.dart';
 import 'features/scheduling/past_due_marker.dart';
 import 'features/scheduling/permission_service.dart';
 import 'features/scheduling/scheduling_service.dart';
-import 'features/scheduling/workmanager_service.dart';
 import 'features/sync/firestore_sync_service.dart';
 import 'firebase_options.dart';
 
@@ -58,10 +57,8 @@ String get _emulatorHost {
       : 'localhost';
 }
 
-/// One-time app startup: opens the (single, shared) [AppDatabase], registers
-/// the WorkManager [callbackDispatcher] the background isolate uses to
-/// reopen that same database file, then runs the app with the database
-/// instance overridden into [appDatabaseProvider].
+/// One-time app startup: opens the (single, shared) [AppDatabase], then runs
+/// the app with the database instance overridden into [appDatabaseProvider].
 ///
 /// Notification-permission and exact-alarm prompts are deliberately **not**
 /// requested here — they fire contextually, the first time the user creates
@@ -79,16 +76,11 @@ Future<void> bootstrap() async {
   final notificationService =
       NotificationService(FlutterLocalNotificationsPlugin());
 
-  // The scheduling stack is mobile-oriented: WorkManager and local
-  // notifications have partial or no-op web implementations. A failure to
-  // initialize them must not stop the app booting — notes CRUD and "My
-  // places" work fine without a scheduler, and time reminders are the only
-  // thing degraded. Surfaced as a debug log rather than swallowed silently.
-  // await _initQuietly(
-  //   'WorkManager',
-  //   'time reminders may not fire',
-  //   () => const WorkManagerService().init(),
-  // );
+  // Local notifications have partial or no-op web implementations. A failure
+  // to initialize them must not stop the app booting — notes CRUD and "My
+  // places" work fine without them, and time reminders are the only thing
+  // degraded. Surfaced as a debug log rather than swallowed silently.
+  //
   // Tapping a reminder opens its note. Set before init so a tap delivered
   // during init isn't lost.
   notificationService.onNoteTapped = AppRoutes.openNoteDetail;
@@ -177,7 +169,6 @@ Future<void> bootstrap() async {
       noteRepository: DriftNoteRepository(database),
       schedulingService: SchedulingService(
         notificationService: notificationService,
-        workManagerService: const WorkManagerService(),
         permissionService: const PermissionService(),
       ),
     );

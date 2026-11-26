@@ -1,7 +1,6 @@
 import '../../domain/models/note.dart';
 import 'notification_service.dart';
 import 'permission_service.dart';
-import 'workmanager_service.dart';
 
 /// How a reminder actually got scheduled.
 enum ReminderDelivery {
@@ -66,21 +65,16 @@ class ReminderOutcome {
 ///   exact-alarm path when allowed.
 /// - Farther-out reminders use an inexact alarm, which is fine days ahead.
 ///
-/// WorkManager is no longer used for delivery; [workManagerService] is kept
-/// only to cancel tasks registered by older builds.
-///
 /// Both prompts this depends on (notification permission, exact-alarm
 /// allowance) are requested contextually, the first time a reminder is
 /// actually created — never at app startup.
 class SchedulingService {
   SchedulingService({
     required this.notificationService,
-    required this.workManagerService,
     required this.permissionService,
   });
 
   final NotificationService notificationService;
-  final WorkManagerService workManagerService;
   final PermissionService permissionService;
 
   static const _exactScheduleThreshold = Duration(hours: 6);
@@ -136,13 +130,6 @@ class SchedulingService {
 
   /// Cancels any pending delivery for [noteId] — called when a note is
   /// marked done or deleted, so it never fires late.
-  Future<void> cancelReminder(int noteId) async {
-    await notificationService.cancel(noteId);
-    // Legacy: older builds registered WorkManager tasks. WorkManager is not
-    // initialized any more, so this can throw; it must never block the
-    // caller (e.g. marking a note done must still sync).
-    try {
-      await workManagerService.cancelNoteReminder(noteId);
-    } catch (_) {}
-  }
+  Future<void> cancelReminder(int noteId) =>
+      notificationService.cancel(noteId);
 }

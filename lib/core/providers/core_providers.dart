@@ -8,7 +8,6 @@ import '../../data/repositories/user_place_repository.dart';
 import '../../features/scheduling/notification_service.dart';
 import '../../features/scheduling/permission_service.dart';
 import '../../features/scheduling/scheduling_service.dart';
-import '../../features/scheduling/workmanager_service.dart';
 import '../../features/sync/firestore_sync_service.dart';
 import '../../services/ai/backend_note_parser.dart';
 import '../../services/ai/note_parser.dart';
@@ -34,10 +33,6 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService(FlutterLocalNotificationsPlugin());
 });
 
-final workManagerServiceProvider = Provider<WorkManagerService>((ref) {
-  return const WorkManagerService();
-});
-
 final permissionServiceProvider = Provider<PermissionService>((ref) {
   return const PermissionService();
 });
@@ -45,7 +40,6 @@ final permissionServiceProvider = Provider<PermissionService>((ref) {
 final schedulingServiceProvider = Provider<SchedulingService>((ref) {
   return SchedulingService(
     notificationService: ref.watch(notificationServiceProvider),
-    workManagerService: ref.watch(workManagerServiceProvider),
     permissionService: ref.watch(permissionServiceProvider),
   );
 });
