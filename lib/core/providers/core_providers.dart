@@ -14,7 +14,6 @@ import '../../services/ai/backend_note_parser.dart';
 import '../../services/ai/note_parser.dart';
 import '../../services/backend/http_recall_api_client.dart';
 import '../../services/backend/recall_api_client.dart';
-import '../../services/fcm/fcm_service.dart';
 
 /// The app's single [AppDatabase] instance — kept alive for the app's
 /// lifetime (opened once in `bootstrap.dart` and overridden into this
@@ -67,10 +66,6 @@ final recallApiClientProvider = Provider<RecallApiClient>((ref) {
 final noteParserProvider = Provider<NoteParser>((ref) {
   return BackendNoteParser(ref.watch(recallApiClientProvider));
 });
-
-/// FCM token registration. Null unless Firebase came up in `bootstrap.dart`
-/// (which overrides it), so tests and Firebase-less dev machines need nothing.
-final fcmServiceProvider = Provider<FcmService?>((ref) => null);
 
 /// Syncs notes to Firestore alongside the local database (see
 /// `FirestoreSyncService`'s doc comment for why SQLite stays authoritative).

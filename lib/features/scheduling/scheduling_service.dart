@@ -58,11 +58,9 @@ class ReminderOutcome {
 /// Schedules a note's time-based reminder as a local alarm and keeps it in
 /// sync with note lifecycle changes (save / done).
 ///
-/// Delivery is "alarm first, push as backup": every reminder is a local
-/// `zonedSchedule` alarm, which works offline and survives Doze and app
-/// swipe-away. Notes synced with `localAlarm: true` (see
-/// `FirestoreSyncService`) are skipped by the server's FCM cron job, so the
-/// user never gets the reminder twice.
+/// Every reminder is a local `zonedSchedule` alarm, which the OS fires with
+/// no server involved: it works offline and survives Doze and app swipe-away.
+/// `PastDueMarker` marks the note `notified` afterwards.
 ///
 /// - Near-term reminders (within [_exactScheduleThreshold]) use Android's
 ///   exact-alarm path when allowed.

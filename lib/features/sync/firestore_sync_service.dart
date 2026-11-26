@@ -188,8 +188,8 @@ class LiveFirestoreSyncService implements FirestoreSyncService {
         // Best-effort — the note is still correct locally either way.
       }
     } else if (note.id != null && note.status != NoteStatus.notified) {
-      // Not for `notified`: the server sets that after the local alarm has
-      // already fired, and cancelling would also clear the shown
+      // Not for `notified`: that is set (by PastDueMarker on another device)
+      // after the alarm has fired, and cancelling would also clear the shown
       // notification from the tray.
       await _schedulingService.cancelReminder(note.id!);
     }
@@ -207,13 +207,6 @@ class LiveFirestoreSyncService implements FirestoreSyncService {
         'recurrenceRule': note.recurrenceRule,
         'confidence': note.confidence,
         'status': note.status.name,
-        'notificationSent': false,
-        // Alarm first, push as backup: every scheduled time note written by
-        // this app also has a local alarm on the device (SchedulingService),
-        // so the server's cron skips the FCM push for it. If scheduling the
-        // alarm fails, the note is downgraded to `pending` and gets neither.
-        'localAlarm': note.status == NoteStatus.scheduled &&
-            note.resolvedDatetime != null,
         'createdAt': Timestamp.fromDate(note.createdAt),
         'updatedAt': Timestamp.fromDate(note.updatedAt),
       };

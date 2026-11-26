@@ -23,8 +23,6 @@ import 'features/scheduling/scheduling_service.dart';
 import 'features/scheduling/workmanager_service.dart';
 import 'features/sync/firestore_sync_service.dart';
 import 'firebase_options.dart';
-import 'services/backend/http_recall_api_client.dart';
-import 'services/fcm/fcm_service.dart';
 
 /// Region the `parseNote` callable is deployed to. Must match the `region` in
 /// `functions/src/index.ts` and the one `FirebaseRecallApiClient` asks for —
@@ -104,7 +102,6 @@ Future<void> bootstrap() async {
   // it, to decide whether firestoreSyncServiceProvider gets a live override
   // or keeps its no-op default.
   FirestoreSyncService? syncService;
-  FcmService? fcmService;
 
   // Firebase backs the Firestore sync layer. Without it the app
   // still runs: notes simply stay local-only (no sync). So this is another
@@ -175,16 +172,6 @@ Future<void> bootstrap() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     debugPrint('Recall: [5/6] Signed in as uid=$uid');
 
-    try {
-      final fcm = FcmService(HttpRecallApiClient(baseUrl: backendUrl));
-      // Never prompts: registers only if permission was granted before.
-      await fcm.init();
-      fcmService = fcm;
-      debugPrint('Recall: [5.5/6] FCM initialized');
-    } catch (e, st) {
-      debugPrint('Recall: [5.5/6] FCM init failed: $e\n$st');
-    }
-
     final live = LiveFirestoreSyncService(
       uid: uid,
       noteRepository: DriftNoteRepository(database),
@@ -206,8 +193,6 @@ Future<void> bootstrap() async {
         notificationServiceProvider.overrideWithValue(notificationService),
         if (syncService != null)
           firestoreSyncServiceProvider.overrideWithValue(syncService!),
-        if (fcmService != null)
-          fcmServiceProvider.overrideWithValue(fcmService),
       ],
       child: const RecallApp(),
     ),
@@ -232,19 +217,6 @@ Future<void> bootstrap() async {
       if (launchedFor != null) AppRoutes.openNoteDetail(launchedFor);
     } catch (e) {
       debugPrint('Recall: could not read notification launch details: $e');
-    }
-
-    final repository = DriftNoteRepository(database);
-    try {
-      await fcmService?.listenForMessages(PushHandlers(
-        localIdForFirestoreId: (firestoreId) async =>
-            (await repository.getNoteByFirestoreId(firestoreId))?.id,
-        show: (noteId, title, body) => notificationService.showImmediate(
-            noteId: noteId, title: title, body: body),
-        open: AppRoutes.openNoteDetail,
-      ));
-    } catch (e) {
-      debugPrint('Recall: FCM message handling unavailable: $e');
     }
   });
 }

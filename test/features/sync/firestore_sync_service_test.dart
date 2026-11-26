@@ -122,21 +122,6 @@ void main() {
     expect(data['locationKind'], isNull);
   });
 
-  test('pushNote flags scheduled time notes with localAlarm only', () async {
-    await sync.pushNote(buildNote(
-      firestoreId: 'timed',
-      resolvedDatetime: secondsFromNow(const Duration(hours: 2)),
-    ));
-    await sync.pushNote(buildNote(firestoreId: 'untimed'));
-
-    expect((await notesCollection().doc('timed').get()).data()!['localAlarm'],
-        isTrue,
-        reason: 'the server cron must skip the push: the device has an alarm');
-    expect(
-        (await notesCollection().doc('untimed').get()).data()!['localAlarm'],
-        isFalse);
-  });
-
   test('a remote "notified" update does not cancel the shown notification',
       () async {
     final localUpdatedAt = secondsFromNow(const Duration(minutes: -5));
@@ -147,7 +132,7 @@ void main() {
       updatedAt: localUpdatedAt,
     ));
 
-    // What the server's cron writes after the local alarm has fired.
+    // A `notified` update arriving after the local alarm has fired.
     await notesCollection().doc('doc1').set({
       'rawText': 'call mum',
       'taskDescription': 'call mum',
@@ -158,8 +143,6 @@ void main() {
       'recurrenceRule': null,
       'confidence': null,
       'status': 'notified',
-      'notificationSent': true,
-      'localAlarm': true,
       'createdAt': Timestamp.fromDate(localUpdatedAt),
       'updatedAt': Timestamp.fromDate(DateTime.now()),
     });

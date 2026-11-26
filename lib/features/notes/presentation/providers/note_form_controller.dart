@@ -284,11 +284,7 @@ class NoteFormController extends Notifier<NoteFormState> {
       final id = await ref.read(noteRepositoryProvider).insertNote(note);
       final saved = note.copyWith(id: id);
       
-      // Firestore sync is the only write path to the server: pushNote stores
-      // resolvedDatetime as a UTC Timestamp and sets notificationSent: false,
-      // which is everything the reminder scheduler needs. (The old
-      // `saveNote` call to POST /api/notes always threw on enum encoding and
-      // silently fell back to this anyway.)
+      // Firestore sync is how notes leave the device; the backend only parses.
       unawaited(sync.pushNote(saved));
 
       // Scheduling is deliberately outside the insert's failure path. Sharing
@@ -303,11 +299,6 @@ class NoteFormController extends Notifier<NoteFormState> {
               .read(schedulingServiceProvider)
               .scheduleReminder(saved);
           caveat = outcome.caveat;
-          // scheduleReminder just asked for notification permission in
-          // context; now that it may exist, register for server pushes.
-          if (outcome.notificationsAllowed) {
-            unawaited(ref.read(fcmServiceProvider)?.ensureRegistered());
-          }
         } catch (error) {
           // Downgrade the status so the list does not claim a reminder that
           // was never registered.
