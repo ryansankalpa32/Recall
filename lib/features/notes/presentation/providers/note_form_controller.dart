@@ -254,9 +254,14 @@ class NoteFormController extends Notifier<NoteFormState> {
         } catch (error) {
           // Downgrade the status so the list does not claim a reminder that
           // was never registered.
-          await ref
-              .read(noteRepositoryProvider)
-              .updateNote(saved.copyWith(status: NoteStatus.pending));
+          final downgraded = saved.copyWith(
+            status: NoteStatus.pending,
+            updatedAt: DateTime.now(),
+          );
+          await ref.read(noteRepositoryProvider).updateNote(downgraded);
+          // Firestore already has it as `scheduled` with a local alarm;
+          // correct that too, or the server would mark it delivered.
+          unawaited(sync.pushNote(downgraded));
           caveat = 'Saved, but the reminder could not be scheduled. '
               'Open the note to set a time again.';
         }

@@ -87,34 +87,65 @@ void main() {
         ));
   });
 
-  test('far-out reminders defer to WorkManagerService', () async {
+  test('far-out reminders use an inexact local alarm, not WorkManager',
+      () async {
     final note = buildNote(DateTime.now().add(const Duration(days: 3)));
 
     final outcome = await scheduling.scheduleReminder(note);
 
     expect(outcome.usedExactAlarm, isFalse);
-    expect(outcome.delivery, ReminderDelivery.deferredWork);
+    expect(outcome.delivery, ReminderDelivery.deferredAlarm);
     expect(outcome.caveat, isNull,
-        reason: 'a far-out reminder going through WorkManager is expected, '
+        reason: 'an inexact alarm days ahead is expected, '
             'not something to warn about');
-    verify(() => workManagerService.scheduleNoteReminder(
+    verify(() => notificationService.scheduleNoteReminder(
           noteId: 1,
-          scheduledDate: any(named: 'scheduledDate'),
-        )).called(1);
-    verifyNever(() => notificationService.scheduleNoteReminder(
-          noteId: any(named: 'noteId'),
           title: any(named: 'title'),
           body: any(named: 'body'),
           scheduledDate: any(named: 'scheduledDate'),
-          useExactAlarm: any(named: 'useExactAlarm'),
+          useExactAlarm: false,
+        )).called(1);
+    verifyNever(() => notificationService.requestExactAlarmsPermission());
+    verifyNever(() => workManagerService.scheduleNoteReminder(
+          noteId: any(named: 'noteId'),
+          scheduledDate: any(named: 'scheduledDate'),
         ));
   });
 
-  test('cancelReminder cancels both delivery mechanisms', () async {
+  test('near-term without exact-alarm allowance falls back with a caveat',
+      () async {
+    when(() => notificationService.canScheduleExactAlarms())
+        .thenAnswer((_) async => false);
+    final note = buildNote(DateTime.now().add(const Duration(minutes: 5)));
+
+    final outcome = await scheduling.scheduleReminder(note);
+
+    expect(outcome.delivery, ReminderDelivery.inexactAlarm);
+    expect(outcome.caveat, isNotNull);
+    verify(() => notificationService.scheduleNoteReminder(
+          noteId: 1,
+          title: any(named: 'title'),
+          body: any(named: 'body'),
+          scheduledDate: any(named: 'scheduledDate'),
+          useExactAlarm: false,
+        )).called(1);
+  });
+
+  test('cancelReminder cancels the local alarm and legacy WorkManager task',
+      () async {
     await scheduling.cancelReminder(1);
 
     verify(() => notificationService.cancel(1)).called(1);
     verify(() => workManagerService.cancelNoteReminder(1)).called(1);
+  });
+
+  test('cancelReminder tolerates an uninitialized WorkManager', () async {
+    when(() => workManagerService.cancelNoteReminder(any()))
+        .thenThrow(StateError('WorkManager not initialized'));
+
+    await scheduling.cancelReminder(1);
+
+    verify(() => notificationService.cancel(1)).called(1);
   });
 
   test('scheduleReminder throws for a note with no resolvedDatetime', () async {

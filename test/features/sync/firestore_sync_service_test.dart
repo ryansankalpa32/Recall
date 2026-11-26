@@ -122,6 +122,55 @@ void main() {
     expect(data['locationKind'], isNull);
   });
 
+  test('pushNote flags scheduled time notes with localAlarm only', () async {
+    await sync.pushNote(buildNote(
+      firestoreId: 'timed',
+      resolvedDatetime: secondsFromNow(const Duration(hours: 2)),
+    ));
+    await sync.pushNote(buildNote(firestoreId: 'untimed'));
+
+    expect((await notesCollection().doc('timed').get()).data()!['localAlarm'],
+        isTrue,
+        reason: 'the server cron must skip the push: the device has an alarm');
+    expect(
+        (await notesCollection().doc('untimed').get()).data()!['localAlarm'],
+        isFalse);
+  });
+
+  test('a remote "notified" update does not cancel the shown notification',
+      () async {
+    final localUpdatedAt = secondsFromNow(const Duration(minutes: -5));
+    final due = secondsFromNow(const Duration(minutes: -1));
+    final id = await repo.insertNote(buildNote(
+      firestoreId: 'doc1',
+      resolvedDatetime: due,
+      updatedAt: localUpdatedAt,
+    ));
+
+    // What the server's cron writes after the local alarm has fired.
+    await notesCollection().doc('doc1').set({
+      'rawText': 'call mum',
+      'taskDescription': 'call mum',
+      'triggerType': 'time',
+      'locationKind': null,
+      'geofenceTransition': null,
+      'resolvedDatetime': Timestamp.fromDate(due),
+      'recurrenceRule': null,
+      'confidence': null,
+      'status': 'notified',
+      'notificationSent': true,
+      'localAlarm': true,
+      'createdAt': Timestamp.fromDate(localUpdatedAt),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+
+    await sync.startListening();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect((await repo.getNote(id))!.status, NoteStatus.notified);
+    verifyNever(() => scheduling.cancelReminder(any()));
+  });
+
   test('pushDelete removes the document', () async {
     final note = buildNote(firestoreId: 'doc1');
     await sync.pushNote(note);

@@ -66,6 +66,25 @@ async function processTask(
   const userId = pathParts[1];
   const noteId = doc.id;
 
+  // Alarm first, push as backup: the device that wrote this note scheduled
+  // its own local alarm, which has fired by now. Pushing too would show the
+  // reminder twice, so just record that it was delivered.
+  if (data.localAlarm === true) {
+    try {
+      await doc.ref.update({
+        notificationSent: true,
+        status: "notified",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      console.log(
+        `[Scheduler] Task ${noteId} delivered by local alarm; no push sent`,
+      );
+    } catch (error) {
+      console.error(`[Scheduler] Failed to update task ${noteId}:`, error);
+    }
+    return;
+  }
+
   console.log(
     `[Scheduler] Processing task ${noteId} for user ${userId}: "${taskDescription}"`,
   );
