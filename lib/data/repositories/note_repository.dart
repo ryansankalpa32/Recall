@@ -10,6 +10,9 @@ abstract class NoteRepository {
   Future<Note?> getNoteByFirestoreId(String firestoreId);
   Future<int> insertNote(Note note);
   Future<void> updateNote(Note note);
+
+  /// Scheduled notes whose reminder time is at or before [now].
+  Future<List<Note>> getPastDueScheduled(DateTime now);
   Future<void> deleteNote(int id);
 }
 
@@ -46,6 +49,10 @@ class DriftNoteRepository implements NoteRepository {
 
   @override
   Future<void> deleteNote(int id) => _db.noteDao.deleteNote(id);
+
+  @override
+  Future<List<Note>> getPastDueScheduled(DateTime now) async =>
+      (await _db.noteDao.getPastDueScheduled(now)).map(_toDomain).toList();
 
   Note _toDomain(NoteRow row) => Note(
         id: row.id,

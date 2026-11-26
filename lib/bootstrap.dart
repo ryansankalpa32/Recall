@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -15,6 +17,7 @@ import 'core/routing/app_routes.dart';
 import 'data/local/database/app_database.dart';
 import 'data/repositories/note_repository.dart';
 import 'features/scheduling/notification_service.dart';
+import 'features/scheduling/past_due_marker.dart';
 import 'features/scheduling/permission_service.dart';
 import 'features/scheduling/scheduling_service.dart';
 import 'features/scheduling/workmanager_service.dart';
@@ -210,6 +213,18 @@ Future<void> bootstrap() async {
     ),
   );
 
+  // Alarms can't run code when they fire, so the app marks past-due
+  // reminders `notified` itself: now, and each time it comes back to the
+  // foreground.
+  final pastDue = PastDueMarker(
+    noteRepository: DriftNoteRepository(database),
+    syncService: syncService ?? const NoopFirestoreSyncService(),
+  );
+  Future<void> markPastDue() => pastDue.markPastDue().then((_) {}, onError:
+      (Object e) => debugPrint('Recall: marking past-due notes failed: $e'));
+  _lifecycleListener = AppLifecycleListener(onResume: markPastDue);
+  unawaited(markPastDue());
+
   // Cold-start taps can only navigate once the navigator exists.
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     try {
@@ -233,6 +248,10 @@ Future<void> bootstrap() async {
     }
   });
 }
+
+/// Held for the app's lifetime so it keeps listening for resumes.
+// ignore: unused_element
+AppLifecycleListener? _lifecycleListener;
 
 Future<void> _initQuietly(
   String what,
