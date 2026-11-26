@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../providers/note_form_controller.dart';
 import 'parsed_note_confirmation.dart';
+import 'reminder_time_picker.dart';
 
 /// Free-text capture, opened via [showModalBottomSheet] from
 /// `NotesListScreen`'s FAB.
 ///
 /// Phase 2 flow: type, tap Save, and the sheet swaps to a confirmation card
 /// showing what the parser understood (Claude.md: never save an AI-parsed
-/// trigger silently). There is no manual time entry anywhere in this flow —
-/// a reminder time only ever comes from the AI parse. A failed parse falls
-/// back to saving the note as plain text with no reminder, so a note can
-/// always be saved regardless of whether the parser is reachable.
+/// trigger silently); the card's "Edit time" lets the user correct it. A
+/// failed parse falls back to an optional hand-picked time, or a plain note,
+/// so a note can always be saved whether or not the parser is reachable.
 class NoteCaptureSheet extends ConsumerWidget {
   const NoteCaptureSheet({super.key});
 
@@ -64,11 +65,22 @@ class NoteCaptureSheet extends ConsumerWidget {
             notice: formState.notice,
             onConfirm: () => close(controller.confirm()),
             onBack: controller.backToEditing,
+            onEditTime: () async {
+              final picked = await pickReminderTime(context,
+                  initial: formState.parsed!.resolvedDatetime);
+              if (picked != null) controller.overrideParsedTime(picked);
+            },
           ),
         _ => _CaptureForm(
             formState: formState,
             onChanged: controller.setRawText,
             onSubmit: () => close(controller.submit()),
+            onPickTime: () async {
+              final picked = await pickReminderTime(context,
+                  initial: formState.manualTime);
+              if (picked != null) controller.setManualTime(picked);
+            },
+            onClearTime: () => controller.setManualTime(null),
           ),
       },
     );
@@ -80,11 +92,15 @@ class _CaptureForm extends StatelessWidget {
     required this.formState,
     required this.onChanged,
     required this.onSubmit,
+    required this.onPickTime,
+    required this.onClearTime,
   });
 
   final NoteFormState formState;
   final ValueChanged<String> onChanged;
   final VoidCallback onSubmit;
+  final VoidCallback onPickTime;
+  final VoidCallback onClearTime;
 
   @override
   Widget build(BuildContext context) {
@@ -116,11 +132,42 @@ class _CaptureForm extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             formState.parseFailed
-                ? "Couldn't read a time from this note. Tap Save again to "
-                    'save as a plain note.'
+                ? "Couldn't read a time from this note. Pick one below, or "
+                    'tap Save to save it as a plain note.'
                 : 'Could not save note: ${formState.error}',
             style: TextStyle(color: theme.colorScheme.error),
           ),
+        ],
+        if (formState.parseFailed) ...[
+          const SizedBox(height: 12),
+          if (formState.manualTime == null)
+            OutlinedButton.icon(
+              onPressed: formState.isBusy ? null : onPickTime,
+              icon: const Icon(Icons.alarm_add),
+              label: const Text('Add reminder time'),
+            )
+          else
+            Row(
+              children: [
+                const Icon(Icons.alarm),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                        alignment: Alignment.centerLeft),
+                    onPressed: formState.isBusy ? null : onPickTime,
+                    child: Text(DateFormat.yMMMEd()
+                        .add_jm()
+                        .format(formState.manualTime!)),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Remove reminder time',
+                  onPressed: formState.isBusy ? null : onClearTime,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
         ],
         const SizedBox(height: 16),
         FilledButton(

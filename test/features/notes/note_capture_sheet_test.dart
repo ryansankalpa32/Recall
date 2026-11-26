@@ -76,6 +76,8 @@ void main() {
             reason: 'the card replaces the form');
         // Displayed, never acted on — branching on it is Phase 7.
         expect(find.textContaining('93% confidence'), findsOneWidget);
+        expect(find.text('Edit time'), findsOneWidget,
+            reason: 'the user can correct the parsed time before saving');
       },
       overrides: [noteParserProvider.overrideWithValue(parser)],
     );
@@ -153,6 +155,8 @@ void main() {
 
         expect(find.byType(ParsedNoteConfirmation), findsNothing);
         expect(find.textContaining("Couldn't read a time"), findsOneWidget);
+        expect(find.text('Add reminder time'), findsOneWidget,
+            reason: 'a failed parse offers a manual time');
         expect(saveButton(tester).onPressed, isNotNull,
             reason: 'the user must still be able to save without a parse');
 

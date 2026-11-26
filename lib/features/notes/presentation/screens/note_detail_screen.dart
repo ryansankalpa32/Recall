@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/providers/core_providers.dart';
 import '../../../../domain/models/enums/note_status.dart';
+import '../../../../domain/models/enums/trigger_type.dart';
 import '../providers/notes_list_provider.dart';
+import '../widgets/reminder_time_picker.dart';
 import '../widgets/status_indicator.dart';
 import '../widgets/trigger_type_icon.dart';
 
@@ -23,6 +25,45 @@ class NoteDetailScreen extends ConsumerWidget {
     await repo.updateNote(updated);
     await ref.read(schedulingServiceProvider).cancelReminder(noteId);
     unawaited(ref.read(firestoreSyncServiceProvider).pushNote(updated));
+  }
+
+  /// Sets or changes the note's reminder time, reschedules the local alarm,
+  /// and syncs. Mirrors the capture flow's save-then-schedule handling.
+  Future<void> _changeTime(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(noteRepositoryProvider);
+    final note = await repo.getNote(noteId);
+    if (note == null || !context.mounted) return;
+
+    final picked = await pickReminderTime(context, initial: note.resolvedDatetime);
+    if (picked == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (!picked.isAfter(DateTime.now())) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('That time has already passed — pick a later one.')));
+      return;
+    }
+
+    final scheduling = ref.read(schedulingServiceProvider);
+    final sync = ref.read(firestoreSyncServiceProvider);
+    var updated = note.copyWith(
+      triggerType: TriggerType.time,
+      resolvedDatetime: picked,
+      status: NoteStatus.scheduled,
+      updatedAt: DateTime.now(),
+    );
+    await repo.updateNote(updated);
+
+    String? caveat;
+    try {
+      await scheduling.cancelReminder(noteId);
+      caveat = (await scheduling.scheduleReminder(updated)).caveat;
+    } catch (_) {
+      updated = updated.copyWith(status: NoteStatus.pending);
+      await repo.updateNote(updated);
+      caveat = 'Saved, but the reminder could not be scheduled.';
+    }
+    unawaited(sync.pushNote(updated));
+    if (caveat != null) messenger.showSnackBar(SnackBar(content: Text(caveat)));
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
@@ -84,6 +125,16 @@ class NoteDetailScreen extends ConsumerWidget {
                   ),
                 ],
                 const Spacer(),
+                if (!isDone) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _changeTime(context, ref),
+                    icon: const Icon(Icons.edit_calendar),
+                    label: Text(note.resolvedDatetime == null
+                        ? 'Set reminder time'
+                        : 'Change time'),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 if (!isDone)
                   FilledButton.icon(
                     onPressed: () => _markDone(ref),

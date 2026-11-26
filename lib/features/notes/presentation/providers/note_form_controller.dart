@@ -24,9 +24,14 @@ class NoteFormState {
     this.parseFailed = false,
     this.error,
     this.notice,
+    this.manualTime,
   });
 
   final String rawText;
+
+  /// A reminder time the user picked by hand after a failed parse. Null
+  /// means "save as a plain note".
+  final DateTime? manualTime;
 
   final CaptureStage stage;
 
@@ -62,6 +67,8 @@ class NoteFormState {
     bool clearError = false,
     String? notice,
     bool clearNotice = false,
+    DateTime? manualTime,
+    bool clearManualTime = false,
   }) {
     return NoteFormState(
       rawText: rawText ?? this.rawText,
@@ -70,6 +77,7 @@ class NoteFormState {
       parseFailed: parseFailed ?? this.parseFailed,
       error: clearError ? null : (error ?? this.error),
       notice: clearNotice ? null : (notice ?? this.notice),
+      manualTime: clearManualTime ? null : (manualTime ?? this.manualTime),
     );
   }
 }
@@ -102,7 +110,50 @@ class NoteFormController extends Notifier<NoteFormState> {
       clearError: true,
       clearNotice: true,
       parseFailed: textChanged ? false : null,
+      // A hand-picked time belonged to the failed parse of the old text.
+      clearManualTime: textChanged,
       stage: CaptureStage.editing,
+    );
+  }
+
+  static const _pastTimeNotice =
+      'That time has already passed — pick a later one.';
+
+  /// Sets (or clears, with null) the hand-picked reminder time used when a
+  /// parse failed. A time that has already passed is rejected with a notice.
+  void setManualTime(DateTime? time) {
+    if (time != null && !time.isAfter(DateTime.now())) {
+      state = state.copyWith(notice: _pastTimeNotice);
+      return;
+    }
+    state = state.copyWith(
+      manualTime: time,
+      clearManualTime: time == null,
+      clearNotice: true,
+    );
+  }
+
+  /// Replaces the time on the confirmation card with one the user picked.
+  /// The card then shows the new time before anything is saved, so the
+  /// show-before-commit rule still holds.
+  void overrideParsedTime(DateTime time) {
+    final parsed = state.parsed;
+    if (parsed == null || state.isBusy) return;
+    if (!time.isAfter(DateTime.now())) {
+      state = state.copyWith(notice: _pastTimeNotice);
+      return;
+    }
+    state = state.copyWith(
+      parsed: ParsedNote(
+        taskDescription: parsed.taskDescription,
+        triggerType: TriggerType.time.name,
+        locationKind: parsed.locationKind,
+        locationValue: parsed.locationValue,
+        resolvedDatetime: time,
+        recurrenceRule: parsed.recurrenceRule,
+        confidence: parsed.confidence,
+      ),
+      clearNotice: true,
     );
   }
 
@@ -123,17 +174,23 @@ class NoteFormController extends Notifier<NoteFormState> {
   /// means either that the flow moved on to the confirmation card, or that
   /// something failed and the sheet should stay open showing why.
   ///
-  /// There is no manual time entry in this build — every reminder time comes
-  /// from the AI parse. A prior parse failure bypasses the parser on this
-  /// attempt (saving as a plain, timeless note) so a note can always be
-  /// written with no backend reachable; see [NoteFormState.parseFailed].
+  /// A prior parse failure bypasses the parser on this attempt and saves
+  /// with the hand-picked [NoteFormState.manualTime] (or as a plain note if
+  /// none was picked), so a note can always be written with no backend
+  /// reachable; see [NoteFormState.parseFailed].
   Future<bool> submit() async {
     if (!state.canSubmit) return false;
 
     if (state.parseFailed) {
+      final manual = state.manualTime;
+      // The picker could have been left open past the chosen time.
+      if (manual != null && !manual.isAfter(DateTime.now())) {
+        state = state.copyWith(notice: _pastTimeNotice);
+        return false;
+      }
       return _persist(
         taskDescription: state.rawText.trim(),
-        resolvedDatetime: null,
+        resolvedDatetime: manual,
         confidence: null,
       );
     }

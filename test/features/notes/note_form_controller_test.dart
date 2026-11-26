@@ -277,6 +277,67 @@ void main() {
     expect(pushed.last.status, NoteStatus.pending);
   });
 
+  group('manual time', () {
+    Future<NoteFormController> failParse(String text) async {
+      when(() => parser.parse(any()))
+          .thenThrow(const NoteParseException('offline'));
+      final c = controller();
+      c.setRawText(text);
+      await c.submit();
+      expect(formState().parseFailed, isTrue);
+      return c;
+    }
+
+    test('after a failed parse, a picked time is saved and scheduled',
+        () async {
+      final c = await failParse('call mum');
+      final picked = secondsFromNow(const Duration(hours: 3));
+      c.setManualTime(picked);
+
+      expect(await c.submit(), isTrue);
+
+      final saved = (await notes()).single;
+      expect(saved.resolvedDatetime, picked);
+      expect(saved.triggerType, TriggerType.time);
+      expect(saved.status, NoteStatus.scheduled);
+      verify(() => scheduling.scheduleReminder(any())).called(1);
+    });
+
+    test('a past time is rejected with a notice', () async {
+      final c = await failParse('call mum');
+      c.setManualTime(DateTime.now().subtract(const Duration(minutes: 1)));
+
+      expect(formState().manualTime, isNull);
+      expect(formState().notice, isNotNull);
+    });
+
+    test('editing the text clears the picked time', () async {
+      final c = await failParse('call mum');
+      c.setManualTime(secondsFromNow(const Duration(hours: 3)));
+      c.setRawText('call dad');
+
+      expect(formState().manualTime, isNull);
+    });
+
+    test('overrideParsedTime replaces the time shown on the card', () async {
+      when(() => parser.parse(any())).thenAnswer((_) async => noneParse);
+      final c = controller();
+      c.setRawText('buy shoes');
+      await c.submit();
+      final picked = secondsFromNow(const Duration(days: 1));
+
+      c.overrideParsedTime(picked);
+
+      expect(formState().stage, CaptureStage.confirming,
+          reason: 'still shown before commit');
+      expect(formState().parsed!.resolvedDatetime, picked);
+      expect(formState().parsed!.triggerType, 'time');
+
+      expect(await c.confirm(), isTrue);
+      expect((await notes()).single.resolvedDatetime, picked);
+    });
+  });
+
   test('the form resets after a successful save', () async {
     when(() => parser.parse(any())).thenAnswer((_) async => noneParse);
 

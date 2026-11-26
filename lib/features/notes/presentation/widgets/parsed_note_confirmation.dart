@@ -10,10 +10,9 @@ import 'trigger_type_icon.dart';
 ///
 /// Required by Claude.md — an AI-parsed trigger is never saved silently. The
 /// confidence is displayed but never acted on; branching on it is the Phase 7
-/// clarification loop, not this. There is no way to hand-correct the time on
-/// this card — no manual time entry exists anywhere in this build (see
-/// `NoteFormController`) — so every card shown here is, by construction, an
-/// unmodified AI interpretation.
+/// clarification loop, not this. "Edit time" lets the user replace the
+/// parsed time; the card then shows their time, still before anything is
+/// saved.
 class ParsedNoteConfirmation extends StatelessWidget {
   const ParsedNoteConfirmation({
     super.key,
@@ -22,6 +21,7 @@ class ParsedNoteConfirmation extends StatelessWidget {
     this.notice,
     required this.onConfirm,
     required this.onBack,
+    required this.onEditTime,
   });
 
   final ParsedNote parsed;
@@ -35,6 +35,7 @@ class ParsedNoteConfirmation extends StatelessWidget {
 
   final VoidCallback onConfirm;
   final VoidCallback onBack;
+  final VoidCallback onEditTime;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +109,12 @@ class ParsedNoteConfirmation extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Text('Confirm'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: isSaving ? null : onEditTime,
+          icon: const Icon(Icons.edit_calendar),
+          label: Text(hasTime ? 'Edit time' : 'Add reminder time'),
         ),
         const SizedBox(height: 8),
         TextButton(
