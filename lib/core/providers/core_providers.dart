@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config.dart';
 import '../../data/local/database/app_database.dart';
 import '../../data/repositories/note_repository.dart';
 import '../../data/repositories/user_place_repository.dart';
@@ -53,13 +54,8 @@ final schedulingServiceProvider = Provider<SchedulingService>((ref) {
 /// The backend proxy client. Holds no secrets — the Gemini key lives on the
 /// standalone Node.js server as an environment variable.
 ///
-/// The URL is configured via `--dart-define=BACKEND_URL=http://10.0.2.2:5001`
-/// (Android emulator) or similar. Defaults to `http://10.0.2.2:5001`.
+/// The URL comes from `lib/core/config.dart` (`--dart-define=BACKEND_URL`).
 final recallApiClientProvider = Provider<RecallApiClient>((ref) {
-  const backendUrl = String.fromEnvironment(
-    'BACKEND_URL',
-    defaultValue: 'http://10.10.105.168:5001',
-  );
   return HttpRecallApiClient(baseUrl: backendUrl);
 });
 

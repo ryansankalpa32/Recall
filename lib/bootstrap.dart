@@ -9,6 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/config.dart';
 import 'core/providers/core_providers.dart';
 import 'core/routing/app_routes.dart';
 import 'data/local/database/app_database.dart';
@@ -66,6 +67,11 @@ String get _emulatorHost {
 /// a time-based reminder (see `SchedulingService`), never at startup.
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (isUsingDefaultBackendUrl) {
+    debugPrint('Recall: BACKEND_URL not set; using dev default $backendUrl. '
+        'Pass --dart-define=BACKEND_URL=http://<host>:5001 if that is wrong.');
+  }
 
   final database = AppDatabase();
 
@@ -167,14 +173,7 @@ Future<void> bootstrap() async {
     debugPrint('Recall: [5/6] Signed in as uid=$uid');
 
     try {
-      final fcm = FcmService(
-        HttpRecallApiClient(
-          baseUrl: const String.fromEnvironment(
-            'BACKEND_URL',
-            defaultValue: 'http://10.10.105.168:5001',
-          ),
-        ),
-      );
+      final fcm = FcmService(HttpRecallApiClient(baseUrl: backendUrl));
       // Never prompts: registers only if permission was granted before.
       await fcm.init();
       fcmService = fcm;
