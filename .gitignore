@@ -69,3 +69,6 @@ android/**/*.jks
 recall-cfeb3-firebase-adminsdk-fbsvc-ae9a85cac1.json
 server/serviceAccountKey.json
 
+
+# Local secrets (e.g. the old functions/.secret.local) - never commit
+*.secret.local

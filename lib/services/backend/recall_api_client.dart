@@ -32,9 +32,7 @@ class UnimplementedRecallApiClient implements RecallApiClient {
   @override
   Future<ParsedNote> parseNote(String rawText) {
     throw UnimplementedError(
-      'RecallApiClient.parseNote is a Phase 2 feature — not wired into '
-      'Phase 1 UI. The real implementation is FirebaseRecallApiClient, '
-      'backed by the parseNote callable in functions/.',
+      'Use HttpRecallApiClient, which calls /parse-note on server/.',
     );
   }
 

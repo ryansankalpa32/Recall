@@ -8,7 +8,6 @@ environment:
 
 dependencies:
   cloud_firestore: ^6.9.0
-  cloud_functions: ^6.4.0
   drift: ^2.34.3
   drift_flutter: ^0.3.1
   firebase_app_check: ^0.4.7

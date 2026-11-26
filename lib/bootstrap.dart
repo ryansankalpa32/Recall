@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -23,14 +22,8 @@ import 'features/scheduling/scheduling_service.dart';
 import 'features/sync/firestore_sync_service.dart';
 import 'firebase_options.dart';
 
-/// Region the `parseNote` callable is deployed to. Must match the `region` in
-/// `functions/src/index.ts` and the one `FirebaseRecallApiClient` asks for —
-/// `FirebaseFunctions` instances are cached per region, so a mismatch here
-/// would point the emulator override at an instance the client never uses.
-const _functionsRegion = 'us-central1';
-
-/// Route callable traffic at a local Functions emulator instead of the
-/// deployed one. Set with `--dart-define=USE_FIREBASE_EMULATOR=true`.
+/// Route Auth and Firestore at the local Firebase emulators.
+/// Set with `--dart-define=USE_FIREBASE_EMULATOR=true`.
 const _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
 
 /// Emulator host override, for a physical device on the same LAN as the
@@ -43,7 +36,7 @@ const _emulatorHostOverride = String.fromEnvironment('FIREBASE_EMULATOR_HOST');
 /// then has to be registered by hand after every clean install.
 const _appCheckDebugToken = String.fromEnvironment('APP_CHECK_DEBUG_TOKEN');
 
-/// Where the Functions emulator is reachable from the *device*, which is not
+/// Where the emulators are reachable from the *device*, which is not
 /// where it is reachable from the host.
 ///
 /// On an Android emulator `localhost` is the emulated device itself; `10.0.2.2`
@@ -107,15 +100,15 @@ Future<void> bootstrap() async {
     );
     debugPrint('Recall: [2/6] Firebase.initializeApp() succeeded');
 
-    // App Check is what stops the callable being an open, paid Gemini relay
-    // for anyone who finds its URL.
+    // App Check attests requests to Firebase services (Firestore), if
+    // enforcement is turned on in the console. It does not cover
+    // `/parse-note` on our own server, which is protected by Firebase Auth
+    // and a rate limit instead.
     //
     // Play Integrity and DeviceCheck only attest builds signed and distributed
-    // the normal way, so they reject every debug build — which would look
-    // exactly like "the parser is broken". Debug builds therefore use the
-    // debug providers, whose token has to be registered in the console once.
-    // The production providers are the shipping path; never ship the debug
-    // ones, or the endpoint is unprotected again.
+    // the normal way, so they reject every debug build. Debug builds therefore
+    // use the debug providers, whose token has to be registered in the
+    // console once. Never ship the debug providers.
     // Skip App Check when using the local emulator to avoid requiring a real
     // Firebase project with App Check API enabled.
     if (!_useFirebaseEmulator) {
@@ -138,14 +131,12 @@ Future<void> bootstrap() async {
     debugPrint('Recall: [3/6] useFirebaseEmulator=$_useFirebaseEmulator, '
         'emulatorHost=$_emulatorHost');
     if (_useFirebaseEmulator) {
-      FirebaseFunctions.instanceFor(region: _functionsRegion)
-          .useFunctionsEmulator(_emulatorHost, 5001);
       // Must precede any Auth/Firestore call below — an emulator override
       // set after the first real request to either service is ignored.
       await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
       FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
       debugPrint(
-        'Recall: callables/Auth/Firestore routed to emulators at '
+        'Recall: Auth/Firestore routed to emulators at '
         '$_emulatorHost',
       );
     }
