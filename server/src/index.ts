@@ -5,9 +5,6 @@ import cors from "cors";
 
 import { ParseNoteRequestSchema } from "./schema";
 import { parseNoteWithGemini, AiParseError } from "./services/aiService";
-import noteRoutes from "./routes/noteRoutes";
-import fcmRoutes from "./routes/fcmRoutes";
-import { startReminderScheduler } from "./jobs/reminderScheduler";
 import { authenticateUser } from "./middleware/auth";
 import { geminiRateLimit } from "./middleware/geminiRateLimit";
 
@@ -23,8 +20,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use("/api", noteRoutes);
-app.use("/api", fcmRoutes);
+// This server's only job is a secure proxy to Gemini: the API key must never
+// ship in the app. Notes sync through Firestore directly, and reminders are
+// local alarms on the phone, so there is no scheduler or note API here.
 
 /** Health check — handy for uptime monitors on Render / Railway. */
 app.get("/", (_req, res) => {
@@ -70,5 +68,4 @@ app.post("/parse-note", authenticateUser, geminiRateLimit, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`recall-server listening on http://localhost:${PORT}`);
-  startReminderScheduler();
 });
