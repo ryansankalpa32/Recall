@@ -246,6 +246,11 @@ class NoteFormController extends Notifier<NoteFormState> {
               .read(schedulingServiceProvider)
               .scheduleReminder(saved);
           caveat = outcome.caveat;
+          // scheduleReminder just asked for notification permission in
+          // context; now that it may exist, register for server pushes.
+          if (outcome.notificationsAllowed) {
+            unawaited(ref.read(fcmServiceProvider)?.ensureRegistered());
+          }
         } catch (error) {
           // Downgrade the status so the list does not claim a reminder that
           // was never registered.

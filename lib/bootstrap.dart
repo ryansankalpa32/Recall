@@ -91,6 +91,7 @@ Future<void> bootstrap() async {
   // it, to decide whether firestoreSyncServiceProvider gets a live override
   // or keeps its no-op default.
   FirestoreSyncService? syncService;
+  FcmService? fcmService;
 
   // Firebase backs the Firestore sync layer. Without it the app
   // still runs: notes simply stay local-only (no sync). So this is another
@@ -162,7 +163,7 @@ Future<void> bootstrap() async {
     debugPrint('Recall: [5/6] Signed in as uid=$uid');
 
     try {
-      final fcmService = FcmService(
+      final fcm = FcmService(
         HttpRecallApiClient(
           baseUrl: const String.fromEnvironment(
             'BACKEND_URL',
@@ -170,8 +171,10 @@ Future<void> bootstrap() async {
           ),
         ),
       );
-      await fcmService.init();
-      debugPrint('Recall: [5.5/6] FCM token registered');
+      // Never prompts: registers only if permission was granted before.
+      await fcm.init();
+      fcmService = fcm;
+      debugPrint('Recall: [5.5/6] FCM initialized');
     } catch (e, st) {
       debugPrint('Recall: [5.5/6] FCM init failed: $e\n$st');
     }
@@ -197,6 +200,8 @@ Future<void> bootstrap() async {
         notificationServiceProvider.overrideWithValue(notificationService),
         if (syncService != null)
           firestoreSyncServiceProvider.overrideWithValue(syncService!),
+        if (fcmService != null)
+          fcmServiceProvider.overrideWithValue(fcmService),
       ],
       child: const RecallApp(),
     ),
