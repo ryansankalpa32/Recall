@@ -1,7 +1,6 @@
 import '../../domain/models/note.dart';
 import 'notification_service.dart';
 import 'permission_service.dart';
-import 'workmanager_service.dart';
 
 /// How a reminder actually got scheduled.
 enum ReminderDelivery {
@@ -12,9 +11,9 @@ enum ReminderDelivery {
   /// slip by minutes.
   inexactAlarm,
 
-  /// Handed to WorkManager because the reminder is far enough out that
-  /// surviving process death matters more than to-the-minute accuracy.
-  deferredWork,
+  /// Far enough out that an inexact alarm is used on purpose; it may slip by
+  /// minutes, which doesn't matter days ahead.
+  deferredAlarm,
 }
 
 /// The result of scheduling one reminder.
@@ -39,8 +38,8 @@ class ReminderOutcome {
 
   /// A short, user-facing caveat, or null when the reminder will fire as asked.
   ///
-  /// [ReminderDelivery.deferredWork] is deliberately not a caveat: a reminder
-  /// days away is *expected* to go through WorkManager, and saying so on every
+  /// [ReminderDelivery.deferredAlarm] is deliberately not a caveat: a reminder
+  /// days away is *expected* to use an inexact alarm, and saying so on every
   /// save would be noise.
   String? get caveat {
     if (!notificationsAllowed) {
@@ -55,15 +54,16 @@ class ReminderOutcome {
   }
 }
 
-/// Picks the delivery mechanism for a note's time-based reminder and keeps
-/// the two in sync with note lifecycle changes (save / done).
+/// Schedules a note's time-based reminder as a local alarm and keeps it in
+/// sync with note lifecycle changes (save / done).
 ///
-/// - Near-term reminders (within [_exactScheduleThreshold]) go through
-///   `NotificationService.scheduleNoteReminder` (`zonedSchedule`), which can
-///   use Android's exact-alarm path for precise firing.
-/// - Farther-out reminders go through `WorkManagerService`, which survives
-///   process death/reboots better for long delays but fires on an
-///   inexact/backoff-managed schedule.
+/// Every reminder is a local `zonedSchedule` alarm, which the OS fires with
+/// no server involved: it works offline and survives Doze and app swipe-away.
+/// `PastDueMarker` marks the note `notified` afterwards.
+///
+/// - Near-term reminders (within [_exactScheduleThreshold]) use Android's
+///   exact-alarm path when allowed.
+/// - Farther-out reminders use an inexact alarm, which is fine days ahead.
 ///
 /// Both prompts this depends on (notification permission, exact-alarm
 /// allowance) are requested contextually, the first time a reminder is
@@ -71,12 +71,10 @@ class ReminderOutcome {
 class SchedulingService {
   SchedulingService({
     required this.notificationService,
-    required this.workManagerService,
     required this.permissionService,
   });
 
   final NotificationService notificationService;
-  final WorkManagerService workManagerService;
   final PermissionService permissionService;
 
   static const _exactScheduleThreshold = Duration(hours: 6);
@@ -101,20 +99,37 @@ class SchedulingService {
     final notificationsAllowed =
         await permissionService.requestNotificationPermission();
 
-    // Phase 2 server-side scheduling: The Node.js backend handles all polling
-    // and sends an FCM push notification. We bypass WorkManager and local
-    // exact alarms entirely.
+    final nearTerm =
+        scheduledDate.difference(DateTime.now()) <= _exactScheduleThreshold;
+
+    var useExact = false;
+    if (nearTerm) {
+      final exactGranted =
+          await notificationService.requestExactAlarmsPermission();
+      useExact =
+          exactGranted && await notificationService.canScheduleExactAlarms();
+    }
+
+    await notificationService.scheduleNoteReminder(
+      noteId: noteId,
+      title: 'Recall',
+      body: note.taskDescription,
+      scheduledDate: scheduledDate,
+      useExactAlarm: useExact,
+    );
+
     return ReminderOutcome(
       notificationsAllowed: notificationsAllowed,
-      delivery: ReminderDelivery.deferredWork, // Semantic stand-in
+      delivery: useExact
+          ? ReminderDelivery.exactAlarm
+          : nearTerm
+              ? ReminderDelivery.inexactAlarm
+              : ReminderDelivery.deferredAlarm,
     );
   }
 
   /// Cancels any pending delivery for [noteId] — called when a note is
-  /// marked done, so completed notes never fire late. Safe to call even if
-  /// only one of the two mechanisms was actually used.
-  Future<void> cancelReminder(int noteId) async {
-    await notificationService.cancel(noteId);
-    await workManagerService.cancelNoteReminder(noteId);
-  }
+  /// marked done or deleted, so it never fires late.
+  Future<void> cancelReminder(int noteId) =>
+      notificationService.cancel(noteId);
 }

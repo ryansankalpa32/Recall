@@ -34,11 +34,18 @@ Future<void> runWithDatabase(
       child: child,
     ),
   );
+  // Drift's first stream emission completes on real async, which the
+  // fake-async test zone never advances. Without this the screen stays on
+  // its CircularProgressIndicator and pumpAndSettle spins until timeout.
+  await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
   await tester.pumpAndSettle();
 
   await body(db);
 
   await tester.pumpWidget(const SizedBox.shrink());
   await tester.pump();
-  await db.close();
+  // Advance the fake clock so drift's stream-close timer fires, then close on
+  // real async: awaiting db.close() inside the fake-async zone never returns.
+  await tester.pump(const Duration(milliseconds: 10));
+  await tester.runAsync(() => db.close());
 }

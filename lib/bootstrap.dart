@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -9,26 +10,20 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/config.dart';
 import 'core/providers/core_providers.dart';
+import 'core/routing/app_routes.dart';
 import 'data/local/database/app_database.dart';
 import 'data/repositories/note_repository.dart';
 import 'features/scheduling/notification_service.dart';
+import 'features/scheduling/past_due_marker.dart';
 import 'features/scheduling/permission_service.dart';
 import 'features/scheduling/scheduling_service.dart';
-import 'features/scheduling/workmanager_service.dart';
 import 'features/sync/firestore_sync_service.dart';
 import 'firebase_options.dart';
-import 'services/backend/http_recall_api_client.dart';
-import 'services/fcm/fcm_service.dart';
 
-/// Region the `parseNote` callable is deployed to. Must match the `region` in
-/// `functions/src/index.ts` and the one `FirebaseRecallApiClient` asks for —
-/// `FirebaseFunctions` instances are cached per region, so a mismatch here
-/// would point the emulator override at an instance the client never uses.
-const _functionsRegion = 'us-central1';
-
-/// Route callable traffic at a local Functions emulator instead of the
-/// deployed one. Set with `--dart-define=USE_FIREBASE_EMULATOR=true`.
+/// Route Auth and Firestore at the local Firebase emulators.
+/// Set with `--dart-define=USE_FIREBASE_EMULATOR=true`.
 const _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
 
 /// Emulator host override, for a physical device on the same LAN as the
@@ -41,7 +36,7 @@ const _emulatorHostOverride = String.fromEnvironment('FIREBASE_EMULATOR_HOST');
 /// then has to be registered by hand after every clean install.
 const _appCheckDebugToken = String.fromEnvironment('APP_CHECK_DEBUG_TOKEN');
 
-/// Where the Functions emulator is reachable from the *device*, which is not
+/// Where the emulators are reachable from the *device*, which is not
 /// where it is reachable from the host.
 ///
 /// On an Android emulator `localhost` is the emulated device itself; `10.0.2.2`
@@ -55,10 +50,8 @@ String get _emulatorHost {
       : 'localhost';
 }
 
-/// One-time app startup: opens the (single, shared) [AppDatabase], registers
-/// the WorkManager [callbackDispatcher] the background isolate uses to
-/// reopen that same database file, then runs the app with the database
-/// instance overridden into [appDatabaseProvider].
+/// One-time app startup: opens the (single, shared) [AppDatabase], then runs
+/// the app with the database instance overridden into [appDatabaseProvider].
 ///
 /// Notification-permission and exact-alarm prompts are deliberately **not**
 /// requested here — they fire contextually, the first time the user creates
@@ -66,21 +59,24 @@ String get _emulatorHost {
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  if (isUsingDefaultBackendUrl) {
+    debugPrint('Recall: BACKEND_URL not set; using dev default $backendUrl. '
+        'Pass --dart-define=BACKEND_URL=http://<host>:5001 if that is wrong.');
+  }
+
   final database = AppDatabase();
 
   final notificationService =
       NotificationService(FlutterLocalNotificationsPlugin());
 
-  // The scheduling stack is mobile-oriented: WorkManager and local
-  // notifications have partial or no-op web implementations. A failure to
-  // initialize them must not stop the app booting — notes CRUD and "My
-  // places" work fine without a scheduler, and time reminders are the only
-  // thing degraded. Surfaced as a debug log rather than swallowed silently.
-  // await _initQuietly(
-  //   'WorkManager',
-  //   'time reminders may not fire',
-  //   () => const WorkManagerService().init(),
-  // );
+  // Local notifications have partial or no-op web implementations. A failure
+  // to initialize them must not stop the app booting — notes CRUD and "My
+  // places" work fine without them, and time reminders are the only thing
+  // degraded. Surfaced as a debug log rather than swallowed silently.
+  //
+  // Tapping a reminder opens its note. Set before init so a tap delivered
+  // during init isn't lost.
+  notificationService.onNoteTapped = AppRoutes.openNoteDetail;
   await _initQuietly(
     'notifications',
     'time reminders may not fire',
@@ -104,15 +100,15 @@ Future<void> bootstrap() async {
     );
     debugPrint('Recall: [2/6] Firebase.initializeApp() succeeded');
 
-    // App Check is what stops the callable being an open, paid Gemini relay
-    // for anyone who finds its URL.
+    // App Check attests requests to Firebase services (Firestore), if
+    // enforcement is turned on in the console. It does not cover
+    // `/parse-note` on our own server, which is protected by Firebase Auth
+    // and a rate limit instead.
     //
     // Play Integrity and DeviceCheck only attest builds signed and distributed
-    // the normal way, so they reject every debug build — which would look
-    // exactly like "the parser is broken". Debug builds therefore use the
-    // debug providers, whose token has to be registered in the console once.
-    // The production providers are the shipping path; never ship the debug
-    // ones, or the endpoint is unprotected again.
+    // the normal way, so they reject every debug build. Debug builds therefore
+    // use the debug providers, whose token has to be registered in the
+    // console once. Never ship the debug providers.
     // Skip App Check when using the local emulator to avoid requiring a real
     // Firebase project with App Check API enabled.
     if (!_useFirebaseEmulator) {
@@ -135,14 +131,12 @@ Future<void> bootstrap() async {
     debugPrint('Recall: [3/6] useFirebaseEmulator=$_useFirebaseEmulator, '
         'emulatorHost=$_emulatorHost');
     if (_useFirebaseEmulator) {
-      FirebaseFunctions.instanceFor(region: _functionsRegion)
-          .useFunctionsEmulator(_emulatorHost, 5001);
       // Must precede any Auth/Firestore call below — an emulator override
       // set after the first real request to either service is ignored.
       await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
       FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
       debugPrint(
-        'Recall: callables/Auth/Firestore routed to emulators at '
+        'Recall: Auth/Firestore routed to emulators at '
         '$_emulatorHost',
       );
     }
@@ -161,27 +155,11 @@ Future<void> bootstrap() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     debugPrint('Recall: [5/6] Signed in as uid=$uid');
 
-    try {
-      final fcmService = FcmService(
-        HttpRecallApiClient(
-          baseUrl: const String.fromEnvironment(
-            'BACKEND_URL',
-            defaultValue: 'http://10.10.105.168:5001',
-          ),
-        ),
-      );
-      await fcmService.init();
-      debugPrint('Recall: [5.5/6] FCM token registered');
-    } catch (e, st) {
-      debugPrint('Recall: [5.5/6] FCM init failed: $e\n$st');
-    }
-
     final live = LiveFirestoreSyncService(
       uid: uid,
       noteRepository: DriftNoteRepository(database),
       schedulingService: SchedulingService(
         notificationService: notificationService,
-        workManagerService: const WorkManagerService(),
         permissionService: const PermissionService(),
       ),
     );
@@ -201,7 +179,33 @@ Future<void> bootstrap() async {
       child: const RecallApp(),
     ),
   );
+
+  // Alarms can't run code when they fire, so the app marks past-due
+  // reminders `notified` itself: now, and each time it comes back to the
+  // foreground.
+  final pastDue = PastDueMarker(
+    noteRepository: DriftNoteRepository(database),
+    syncService: syncService ?? const NoopFirestoreSyncService(),
+  );
+  Future<void> markPastDue() => pastDue.markPastDue().then((_) {}, onError:
+      (Object e) => debugPrint('Recall: marking past-due notes failed: $e'));
+  _lifecycleListener = AppLifecycleListener(onResume: markPastDue);
+  unawaited(markPastDue());
+
+  // Cold-start taps can only navigate once the navigator exists.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    try {
+      final launchedFor = await notificationService.launchNoteId();
+      if (launchedFor != null) AppRoutes.openNoteDetail(launchedFor);
+    } catch (e) {
+      debugPrint('Recall: could not read notification launch details: $e');
+    }
+  });
 }
+
+/// Held for the app's lifetime so it keeps listening for resumes.
+// ignore: unused_element
+AppLifecycleListener? _lifecycleListener;
 
 Future<void> _initQuietly(
   String what,

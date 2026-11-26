@@ -14,9 +14,9 @@ import '../scheduling/scheduling_service.dart';
 /// Syncs notes to Firestore, alongside — never instead of — the local
 /// SQLite database that stays authoritative for on-device scheduling.
 ///
-/// This is the only place `cloud_firestore` types are allowed to appear,
-/// mirroring the rule `firebase_recall_api_client.dart` already applies to
-/// `cloud_functions`: everything outside this file works with plain [Note]s,
+/// This is the only place `cloud_firestore` types are allowed to appear
+/// (as `http_recall_api_client.dart` is for HTTP): everything outside this
+/// file works with plain [Note]s,
 /// so the rest of the app never needs to know Firestore exists.
 abstract class FirestoreSyncService {
   /// Allocates a Firestore document id with no network round-trip, or null
@@ -187,7 +187,10 @@ class LiveFirestoreSyncService implements FirestoreSyncService {
       } catch (_) {
         // Best-effort — the note is still correct locally either way.
       }
-    } else if (note.id != null) {
+    } else if (note.id != null && note.status != NoteStatus.notified) {
+      // Not for `notified`: that is set (by PastDueMarker on another device)
+      // after the alarm has fired, and cancelling would also clear the shown
+      // notification from the tray.
       await _schedulingService.cancelReminder(note.id!);
     }
   }
@@ -204,7 +207,6 @@ class LiveFirestoreSyncService implements FirestoreSyncService {
         'recurrenceRule': note.recurrenceRule,
         'confidence': note.confidence,
         'status': note.status.name,
-        'notificationSent': false,
         'createdAt': Timestamp.fromDate(note.createdAt),
         'updatedAt': Timestamp.fromDate(note.updatedAt),
       };

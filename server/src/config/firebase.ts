@@ -1,6 +1,4 @@
 import { initializeApp, cert, ServiceAccount } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getMessaging } from "firebase-admin/messaging";
 import { getAuth } from "firebase-admin/auth";
 import * as fs from "fs";
 import * as path from "path";
@@ -26,8 +24,10 @@ if (useEmulator) {
     `[Firebase] Auth emulator: ${process.env.FIREBASE_AUTH_EMULATOR_HOST}`,
   );
 } else {
-  // Production: use a service account JSON file or Application Default
-  // Credentials (GOOGLE_APPLICATION_CREDENTIALS env var).
+  // The server only *verifies* Firebase ID tokens, which needs just the
+  // project ID (tokens are checked against Google's public keys), so no
+  // service account is required on the host. FIREBASE_SERVICE_ACCOUNT_PATH
+  // is still honoured for local tools that mint tokens (scratch/getToken.js).
   const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
 
   if (serviceAccountPath) {
@@ -39,12 +39,9 @@ if (useEmulator) {
     initializeApp({ credential: cert(serviceAccount) });
     console.log("[Firebase] Initialized with service account");
   } else {
-    // Falls back to GOOGLE_APPLICATION_CREDENTIALS or metadata server
     initializeApp({ projectId });
-    console.log("[Firebase] Initialized with default credentials");
+    console.log(`[Firebase] Initialized for project ${projectId}`);
   }
 }
 
-export const db = getFirestore();
-export const messaging = getMessaging();
 export const auth = getAuth();

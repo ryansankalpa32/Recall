@@ -1,4 +1,3 @@
-import '../../domain/models/note.dart';
 import '../ai/note_parser.dart';
 
 /// Result of a Places nearby-category lookup. Symbolic/display data only —
@@ -20,8 +19,6 @@ class NearbyPlace {
 /// Unimplemented in Phase 1 — nothing calls this yet.
 abstract class RecallApiClient {
   Future<ParsedNote> parseNote(String rawText);
-  Future<String> saveNote(Note note);
-  Future<void> registerFcmToken(String token);
   Future<List<NearbyPlace>> placesNearby({
     required double lat,
     required double lng,
@@ -35,20 +32,8 @@ class UnimplementedRecallApiClient implements RecallApiClient {
   @override
   Future<ParsedNote> parseNote(String rawText) {
     throw UnimplementedError(
-      'RecallApiClient.parseNote is a Phase 2 feature — not wired into '
-      'Phase 1 UI. The real implementation is FirebaseRecallApiClient, '
-      'backed by the parseNote callable in functions/.',
+      'Use HttpRecallApiClient, which calls /parse-note on server/.',
     );
-  }
-
-  @override
-  Future<String> saveNote(Note note) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<void> registerFcmToken(String token) {
-    throw UnimplementedError();
   }
 
   @override

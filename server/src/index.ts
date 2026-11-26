@@ -5,9 +5,8 @@ import cors from "cors";
 
 import { ParseNoteRequestSchema } from "./schema";
 import { parseNoteWithGemini, AiParseError } from "./services/aiService";
-import noteRoutes from "./routes/noteRoutes";
-import fcmRoutes from "./routes/fcmRoutes";
-import { startReminderScheduler } from "./jobs/reminderScheduler";
+import { authenticateUser } from "./middleware/auth";
+import { geminiRateLimit } from "./middleware/geminiRateLimit";
 
 const PORT = parseInt(process.env.PORT ?? "5001", 10);
 
@@ -21,8 +20,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use("/api", noteRoutes);
-app.use("/api", fcmRoutes);
+// This server's only job is a secure proxy to Gemini: the API key must never
+// ship in the app. Notes sync through Firestore directly, and reminders are
+// local alarms on the phone, so there is no scheduler or note API here.
 
 /** Health check — handy for uptime monitors on Render / Railway. */
 app.get("/", (_req, res) => {
@@ -41,7 +41,9 @@ app.get("/", (_req, res) => {
  * commit" rule the moment the user tapped Confirm on something we were not
  * actually sure of.
  */
-app.post("/parse-note", async (req, res) => {
+// Auth + rate limit: without them this is an open, paid Gemini relay for
+// anyone who finds the URL.
+app.post("/parse-note", authenticateUser, geminiRateLimit, async (req, res) => {
   const parsedRequest = ParseNoteRequestSchema.safeParse(req.body);
   if (!parsedRequest.success) {
     res.status(400).json({
@@ -66,5 +68,4 @@ app.post("/parse-note", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`recall-server listening on http://localhost:${PORT}`);
-  startReminderScheduler();
 });

@@ -9,11 +9,14 @@ import 'package:recall/domain/models/enums/trigger_type.dart';
 import 'package:recall/domain/models/note.dart';
 import 'package:recall/features/notes/presentation/providers/note_form_controller.dart';
 import 'package:recall/features/scheduling/scheduling_service.dart';
+import 'package:recall/features/sync/firestore_sync_service.dart';
 import 'package:recall/services/ai/note_parser.dart';
 
 class MockSchedulingService extends Mock implements SchedulingService {}
 
 class MockNoteParser extends Mock implements NoteParser {}
+
+class MockFirestoreSyncService extends Mock implements FirestoreSyncService {}
 
 /// Drift stores `dateTime()` columns as whole unix seconds, so a [DateTime]
 /// carrying microseconds does not survive the round trip through the database.
@@ -234,6 +237,105 @@ void main() {
     expect(formState().stage, CaptureStage.editing);
     expect(formState().parsed, isNull);
     expect(formState().rawText, 'call mum at 4pm');
+  });
+
+  test(
+      'a scheduling failure downgrades the note to pending locally and in '
+      'Firestore', () async {
+    final sync = MockFirestoreSyncService();
+    when(() => sync.reserveDocumentId()).thenReturn('doc1');
+    when(() => sync.pushNote(any())).thenAnswer((_) async {});
+    when(() => scheduling.scheduleReminder(any()))
+        .thenThrow(Exception('alarm failed'));
+    final when0 = secondsFromNow(const Duration(hours: 2));
+    when(() => parser.parse(any())).thenAnswer((_) async => timeParse(when0));
+
+    // A standalone container: a child container would not re-scope the
+    // controller, which would keep using the parent's no-op sync.
+    final c2 = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        schedulingServiceProvider.overrideWithValue(scheduling),
+        noteParserProvider.overrideWithValue(parser),
+        firestoreSyncServiceProvider.overrideWithValue(sync),
+      ],
+    );
+    addTearDown(c2.dispose);
+    final ctrl = c2.read(noteFormControllerProvider.notifier);
+
+    ctrl.setRawText('call mum at 4pm');
+    await ctrl.submit();
+    expect(await ctrl.confirm(), isTrue);
+
+    final saved = (await notes()).single;
+    expect(saved.status, NoteStatus.pending);
+    expect(c2.read(noteFormControllerProvider).notice, isNotNull);
+    // Firestore must not be left as `scheduled` with a local alarm that
+    // doesn't exist, or the server would mark it delivered with no alert.
+    final pushed = verify(() => sync.pushNote(captureAny())).captured
+        .cast<Note>();
+    expect(pushed.last.status, NoteStatus.pending);
+  });
+
+  group('manual time', () {
+    Future<NoteFormController> failParse(String text) async {
+      when(() => parser.parse(any()))
+          .thenThrow(const NoteParseException('offline'));
+      final c = controller();
+      c.setRawText(text);
+      await c.submit();
+      expect(formState().parseFailed, isTrue);
+      return c;
+    }
+
+    test('after a failed parse, a picked time is saved and scheduled',
+        () async {
+      final c = await failParse('call mum');
+      final picked = secondsFromNow(const Duration(hours: 3));
+      c.setManualTime(picked);
+
+      expect(await c.submit(), isTrue);
+
+      final saved = (await notes()).single;
+      expect(saved.resolvedDatetime, picked);
+      expect(saved.triggerType, TriggerType.time);
+      expect(saved.status, NoteStatus.scheduled);
+      verify(() => scheduling.scheduleReminder(any())).called(1);
+    });
+
+    test('a past time is rejected with a notice', () async {
+      final c = await failParse('call mum');
+      c.setManualTime(DateTime.now().subtract(const Duration(minutes: 1)));
+
+      expect(formState().manualTime, isNull);
+      expect(formState().notice, isNotNull);
+    });
+
+    test('editing the text clears the picked time', () async {
+      final c = await failParse('call mum');
+      c.setManualTime(secondsFromNow(const Duration(hours: 3)));
+      c.setRawText('call dad');
+
+      expect(formState().manualTime, isNull);
+    });
+
+    test('overrideParsedTime replaces the time shown on the card', () async {
+      when(() => parser.parse(any())).thenAnswer((_) async => noneParse);
+      final c = controller();
+      c.setRawText('buy shoes');
+      await c.submit();
+      final picked = secondsFromNow(const Duration(days: 1));
+
+      c.overrideParsedTime(picked);
+
+      expect(formState().stage, CaptureStage.confirming,
+          reason: 'still shown before commit');
+      expect(formState().parsed!.resolvedDatetime, picked);
+      expect(formState().parsed!.triggerType, 'time');
+
+      expect(await c.confirm(), isTrue);
+      expect((await notes()).single.resolvedDatetime, picked);
+    });
   });
 
   test('the form resets after a successful save', () async {

@@ -122,6 +122,38 @@ void main() {
     expect(data['locationKind'], isNull);
   });
 
+  test('a remote "notified" update does not cancel the shown notification',
+      () async {
+    final localUpdatedAt = secondsFromNow(const Duration(minutes: -5));
+    final due = secondsFromNow(const Duration(minutes: -1));
+    final id = await repo.insertNote(buildNote(
+      firestoreId: 'doc1',
+      resolvedDatetime: due,
+      updatedAt: localUpdatedAt,
+    ));
+
+    // A `notified` update arriving after the local alarm has fired.
+    await notesCollection().doc('doc1').set({
+      'rawText': 'call mum',
+      'taskDescription': 'call mum',
+      'triggerType': 'time',
+      'locationKind': null,
+      'geofenceTransition': null,
+      'resolvedDatetime': Timestamp.fromDate(due),
+      'recurrenceRule': null,
+      'confidence': null,
+      'status': 'notified',
+      'createdAt': Timestamp.fromDate(localUpdatedAt),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+
+    await sync.startListening();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect((await repo.getNote(id))!.status, NoteStatus.notified);
+    verifyNever(() => scheduling.cancelReminder(any()));
+  });
+
   test('pushDelete removes the document', () async {
     final note = buildNote(firestoreId: 'doc1');
     await sync.pushNote(note);

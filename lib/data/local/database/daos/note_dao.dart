@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../../../domain/models/enums/note_status.dart';
 import '../app_database.dart';
 import '../tables/note_table.dart';
 
@@ -31,6 +32,15 @@ class NoteDao extends DatabaseAccessor<AppDatabase> with _$NoteDaoMixin {
   Future<NoteRow?> getNoteByFirestoreId(String firestoreId) {
     return (select(noteTable)..where((t) => t.firestoreId.equals(firestoreId)))
         .getSingleOrNull();
+  }
+
+  /// Scheduled notes whose reminder time is at or before [now].
+  Future<List<NoteRow>> getPastDueScheduled(DateTime now) {
+    return (select(noteTable)
+          ..where((t) =>
+              t.status.equalsValue(NoteStatus.scheduled) &
+              t.resolvedDatetime.isSmallerOrEqualValue(now)))
+        .get();
   }
 
   Future<int> insertNote(NoteTableCompanion entry) =>

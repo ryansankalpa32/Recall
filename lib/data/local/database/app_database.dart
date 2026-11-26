@@ -16,15 +16,12 @@ part 'app_database.g.dart';
 /// The app's single local database.
 ///
 /// Opened with a *named* on-disk file (`recall.sqlite`, not drift_flutter's
-/// unnamed default) because the WorkManager background isolate (see
-/// `features/scheduling/workmanager_service.dart`) reopens this same file
-/// directly — it has no access to the main isolate's Riverpod container.
+/// unnamed default). Keep the name: existing installs store their notes in
+/// it, and a background isolate (e.g. a future geofence handler) can reopen
+/// the same file directly.
 @DriftDatabase(tables: [NoteTable, UserPlaceTable], daos: [NoteDao, UserPlaceDao])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
-
-  /// Used by the background isolate to reopen the exact same database file.
-  AppDatabase.forBackgroundIsolate() : super(_openConnection());
 
   /// Used by tests to inject an in-memory [QueryExecutor]
   /// (`NativeDatabase.memory()`) instead of opening a file on disk.
