@@ -8,6 +8,8 @@ import { parseNoteWithGemini, AiParseError } from "./services/aiService";
 import noteRoutes from "./routes/noteRoutes";
 import fcmRoutes from "./routes/fcmRoutes";
 import { startReminderScheduler } from "./jobs/reminderScheduler";
+import { authenticateUser } from "./middleware/auth";
+import { geminiRateLimit } from "./middleware/geminiRateLimit";
 
 const PORT = parseInt(process.env.PORT ?? "5001", 10);
 
@@ -41,7 +43,9 @@ app.get("/", (_req, res) => {
  * commit" rule the moment the user tapped Confirm on something we were not
  * actually sure of.
  */
-app.post("/parse-note", async (req, res) => {
+// Auth + rate limit: without them this is an open, paid Gemini relay for
+// anyone who finds the URL.
+app.post("/parse-note", authenticateUser, geminiRateLimit, async (req, res) => {
   const parsedRequest = ParseNoteRequestSchema.safeParse(req.body);
   if (!parsedRequest.success) {
     res.status(400).json({

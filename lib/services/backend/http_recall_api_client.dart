@@ -54,6 +54,17 @@ class HttpRecallApiClient implements RecallApiClient {
       throw NoteParseException('Could not read the device timezone: $error');
     }
 
+    // /parse-note requires a Firebase ID token (it is a paid Gemini relay).
+    final String? idToken;
+    try {
+      idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+    } catch (error) {
+      throw NoteParseException('Could not get a sign-in token: $error');
+    }
+    if (idToken == null) {
+      throw const NoteParseException('Not signed in, so the note cannot be parsed.');
+    }
+
     final uri = Uri.parse('$baseUrl/parse-note');
     final body = jsonEncode({
       'rawText': rawText,
@@ -67,6 +78,7 @@ class HttpRecallApiClient implements RecallApiClient {
       client.connectionTimeout = const Duration(seconds: 30);
       final request = await client.postUrl(uri);
       request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
       request.write(body);
       response = await request.close();
     } catch (error) {

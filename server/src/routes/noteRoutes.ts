@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateUser } from "../middleware/auth";
+import { geminiRateLimit } from "../middleware/geminiRateLimit";
 import {
   createNoteHandler,
   quickCreateNoteHandler,
@@ -11,7 +12,12 @@ const router = Router();
 router.post("/notes", authenticateUser, createNoteHandler);
 
 /** POST /api/notes/quick-create — parse free-text via Gemini and save to Firestore in one step. */
-router.post("/notes/quick-create", authenticateUser, quickCreateNoteHandler);
+router.post(
+  "/notes/quick-create",
+  authenticateUser,
+  geminiRateLimit,
+  quickCreateNoteHandler,
+);
 
 export default router;
 
