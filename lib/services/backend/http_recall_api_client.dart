@@ -119,8 +119,8 @@ class HttpRecallApiClient implements RecallApiClient {
       'firestoreId': note.firestoreId,
       'rawText': note.rawText,
       'taskDescription': note.taskDescription,
-      'triggerType': note.triggerType,
-      'locationKind': note.locationKind,
+      'triggerType': note.triggerType.name,
+      'locationKind': note.locationKind?.name,
       // Note has no locationValue field yet (Phase 3).
       'locationValue': null,
       'resolvedDatetime': note.resolvedDatetime != null ? _localIso(note.resolvedDatetime!) : null,
